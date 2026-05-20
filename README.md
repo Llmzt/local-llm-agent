@@ -1,4 +1,4 @@
-# myagent agent1
+# chat_agent
 
 一个用于学习 Agent 基础工程化的极简中文助手项目。
 
