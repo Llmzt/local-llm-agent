@@ -86,15 +86,6 @@ inputEl.addEventListener("keydown", (event) => {
   formEl.requestSubmit();
 });
 
-newSessionButtonEl.addEventListener("click", () => {//“新会话“按钮功能
-  sessionId = null;//重置对话ID
-  localMessages = [];//清空消息列表
-  localStorage.removeItem(SESSION_KEY);//删除当前对话ID
-  renderMessages();//重新渲染页面
-  renderSessionId();
-  inputEl.focus();//输入框重新聚焦
-});
-
 //将消息发送给后端
 async function sendChatMessage(message) {
   const payload = {

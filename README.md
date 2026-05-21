@@ -11,6 +11,7 @@
 - SQLite 知识库查询与写入
 - API session/history 持久化
 - 轻量 Web 前端
+- 历史会话列表、会话删除、Markdown 消息渲染
 - pytest 自动化测试
 
 核心流程：
@@ -150,6 +151,24 @@ curl -X POST http://127.0.0.1:8000/chat \
   -d '{"message":"今天日期？","session_id":"上一次返回的 session_id"}'
 ```
 
+读取历史会话：
+
+```bash
+curl http://127.0.0.1:8000/sessions/上一次返回的_session_id
+```
+
+列出最近会话：
+
+```bash
+curl http://127.0.0.1:8000/sessions
+```
+
+删除会话：
+
+```bash
+curl -X DELETE http://127.0.0.1:8000/sessions/要删除的_session_id
+```
+
 ## 运行前端
 
 先启动后端 API：
@@ -171,7 +190,14 @@ npm run dev
 http://127.0.0.1:5173
 ```
 
-前端会调用 `/chat`，保存当前 `session_id`，并展示同一会话下的历史消息。
+前端会调用 `/chat`，保存当前 `session_id`，刷新页面后自动加载历史消息。左侧会展示历史会话列表，支持切换会话、刷新列表和删除当前会话。
+
+前端还支持：
+
+- Enter 发送，Shift + Enter 换行
+- 助手回复逐字显示
+- 请求等待时显示思考动画
+- 助手消息 Markdown 渲染
 
 ## 知识库用法
 

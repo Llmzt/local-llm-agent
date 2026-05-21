@@ -27,23 +27,21 @@
           <div class="panel-label">API</div>
           <div id="apiStatus" class="api-status">未连接</div>
         </div>
-    <!-- 历史列表 -->
-    <div class="session-actions">
-    <button id="refreshSessionsButton" class="secondary-button" type="button">
-        刷新列表
-    </button>
-    <button id="deleteSessionButton" class="danger-button" type="button">
-        删除当前会话
-    </button>
-    </div>
 
-    <div class="history-panel">
-    <div class="panel-label">History</div>
-    <div id="sessionList" class="session-list"></div>
-    </div>
+        <div class="session-actions">
+          <button id="refreshSessionsButton" class="secondary-button" type="button">
+            刷新列表
+          </button>
+          <button id="deleteSessionButton" class="danger-button" type="button">
+            删除当前会话
+          </button>
+        </div>
 
+        <div class="history-panel">
+          <div class="panel-label">History</div>
+          <div id="sessionList" class="session-list"></div>
+        </div>
       </aside>
-
 
       <main class="chat-shell">
         <header class="chat-header">
@@ -56,17 +54,17 @@
         <section id="messages" class="messages"></section>
 
         <form id="chatForm" class="composer">
-        <div class="input-wrap">
+          <div class="input-wrap">
             <textarea
-            id="messageInput"
-            rows="2"
-            placeholder="输入消息"
-            autocomplete="off"
+              id="messageInput"
+              rows="2"
+              placeholder="输入消息"
+              autocomplete="off"
             ></textarea>
             <div class="shortcut-hint">Enter 发送，Shift + Enter 换行</div>
-        </div>
+          </div>
 
-        <button id="sendButton" type="submit">发送</button>
+          <button id="sendButton" type="submit">发送</button>
         </form>
       </main>
     </div>
