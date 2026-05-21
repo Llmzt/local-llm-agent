@@ -11,6 +11,7 @@
 - SQLite 知识库查询与写入
 - API session/history 持久化
 - 轻量 Web 前端
+- SSE 真流式输出
 - 历史会话列表、会话删除、Markdown 消息渲染
 - pytest 自动化测试
 
@@ -143,6 +144,15 @@ curl -X POST http://127.0.0.1:8000/chat \
   -d '{"message":"现在几点？"}'
 ```
 
+SSE 流式聊天请求：
+
+```bash
+curl -N -X POST http://127.0.0.1:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{"message":"讲一个短故事"}'
+```
+
 API 会返回 `session_id`，后续请求带上同一个 `session_id` 即可继续同一段历史：
 
 ```bash
@@ -190,13 +200,13 @@ npm run dev
 http://127.0.0.1:5173
 ```
 
-前端会调用 `/chat`，保存当前 `session_id`，刷新页面后自动加载历史消息。左侧会展示历史会话列表，支持切换会话、刷新列表和删除当前会话。
+前端会调用 `/chat/stream` 进行 SSE 真流式聊天，保存当前 `session_id`，刷新页面后自动加载历史消息。左侧会展示历史会话列表，支持切换会话、刷新列表和删除当前会话。
 
 前端还支持：
 
 - Enter 发送，Shift + Enter 换行
-- 助手回复逐字显示
-- 请求等待时显示思考动画
+- 助手回复边生成边显示
+- 首个流式 chunk 到达前显示思考动画
 - 助手消息 Markdown 渲染
 
 ## 知识库用法
@@ -250,6 +260,7 @@ venv/bin/python -m pytest -q
 - 工具路由
 - Agent 主流程
 - FastAPI 基础接口
+- SSE 流式聊天接口
 
 测试使用临时数据库，不会污染真实的 `database/*.db`。
 
