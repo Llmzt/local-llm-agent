@@ -22,7 +22,17 @@ class SQLiteStore:
     
         return conn
 
+
     #-----------数据访问规范化------------
+    @contextmanager
+    def connection(self) -> Iterator[sqlite3.Connection]:
+        """打开连接；适合只读查询。"""
+        conn = self.connect()
+        try:
+            yield conn
+        finally:
+            conn.close()
+
     @contextmanager#被装饰函数必须返回生成器
     def transaction(self) ->Iterator[sqlite3.Connection]:
         """开启事务；成功提交，失败则回滚"""

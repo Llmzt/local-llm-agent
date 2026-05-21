@@ -86,7 +86,7 @@ class SessionStore(SQLiteStore):
     def get_history(self, session_id:str) ->list[dict[str,str]]:
         """读取某个历史对话，不包含system promt"""
         try:
-            with self.transaction() as conn:
+            with self.connection() as conn:
                 self.ensure_tables(conn)
                 rows = conn.execute(
                     """
@@ -169,6 +169,23 @@ class SessionStore(SQLiteStore):
             )
             """
         )
+
+    def delete_session(self,session_id:str)->bool:
+        """删除对话，关联message由数据库级联删除"""
+        try:
+            with self.transaction() as conn:
+                self.ensure_tables(conn)
+                cursor = conn.execute(
+                    "DELETE FROM sessions WHERE id = ?",
+                    (session_id,),
+                )
+        except sqlite3.Error as exc:
+            raise SessionError(
+                f"delete session failed:{exc}",
+                user_message="删除对话失败."
+            )from exc
+        
+        return cursor.rowcount>0 #判断删除操作生效与否
 
 def current_time_text()->str:
     """返回适合数据库保存的时间文本"""

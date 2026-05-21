@@ -28,7 +28,7 @@ class KnowledgeStore(SQLiteStore):
     def search(self, query: str, limit: int = 3) -> list[KnowledgeItem]:
         """按标题、正文、关键词模糊查询知识。"""
         try:
-            with self.transaction() as conn:
+            with self.connection() as conn:
                 self.ensure_tables(conn)
                 rows = conn.execute(
                     """
