@@ -8,6 +8,7 @@ from pathlib import Path
 
 from service.errors import AppError
 from service.env import PROJECT_ROOT
+from service.sqlite_store import SQLiteStore
 
 DEFAULT_SESSION_DB_PATH = PROJECT_ROOT / "database" / "sessions.db"
 
@@ -24,11 +25,11 @@ class SessionMessage:
     content:str
     created_at:str
 
-class SessionStore:
+class SessionStore(SQLiteStore):
     """SQLITE会话存储"""
 
     def __init__(self, db_path: Path | str = DEFAULT_SESSION_DB_PATH):
-        self.db_path = Path(db_path)
+        super().__init__(db_path)
 
     def create_session(self) -> str:
         """创建新对话，返回 session_id"""
@@ -36,7 +37,7 @@ class SessionStore:
         now = current_time_text()
 
         try:
-            with self.connect() as conn:
+            with self.transaction() as conn:
                 self.ensure_tables(conn)
                 conn.execute(
                     """
@@ -45,7 +46,6 @@ class SessionStore:
                     """,
                     (session_id, now, now),
                 )
-                conn.commit()
         except sqlite3.Error as exc:
             raise SessionError(
                 f"create session failed: {exc}",
@@ -59,7 +59,7 @@ class SessionStore:
             return self.create_session()
         
         try:
-            with self.connect() as conn:
+            with self.transaction() as conn:
                 self.ensure_tables(conn)
                 row = conn.execute(
                     "SELECT id FROM sessions WHERE id = ?",
@@ -75,7 +75,6 @@ class SessionStore:
                         """,
                         (session_id, now, now),
                     )
-                    conn.commit()
         except sqlite3.Error as exc:
             raise SessionError(
                 f"ensure session failed:{exc}",
@@ -87,7 +86,7 @@ class SessionStore:
     def get_history(self, session_id:str) ->list[dict[str,str]]:
         """读取某个历史对话，不包含system promt"""
         try:
-            with self.connect() as conn:
+            with self.transaction() as conn:
                 self.ensure_tables(conn)
                 rows = conn.execute(
                     """
@@ -104,7 +103,7 @@ class SessionStore:
                 user_message="读取历史对话失败",
             )from exc
         
-        return [{"role": row[0],"content":row[1]}for row in rows]
+        return [{"role": row["role"],"content":row["content"]}for row in rows]
     
     def append_message(self,session_id: str, role:str,content:str) ->None:
         """追加一条消息"""
@@ -124,7 +123,7 @@ class SessionStore:
         now = current_time_text()
 
         try:
-            with self.connect() as conn:
+            with self.transaction() as conn:
                 self.ensure_tables(conn)
                 conn.execute(
                     """
@@ -141,19 +140,13 @@ class SessionStore:
                     """,
                     (now, session_id),
                 )
-                conn.commit()
         except sqlite3.Error as exc:
             raise SessionError(
                 f"append message failed:{exc}",
                 user_message="保存会话消息失败"
             )from exc
-        
-    def connect(self) ->sqlite3.Connection:
-        """连接历史对话数据库，不存在则创建"""
-        self.db_path.parent.mkdir(parents=True,exist_ok=True)
-        return sqlite3.connect(self.db_path)
     
-    def ensure_tables(self, conn: sqlite3.Connection)->None:
+    def ensure_tables(self, conn)->None:
         """确保会话表和消息表都存在"""
         conn.execute(
             """
@@ -169,10 +162,10 @@ class SessionStore:
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_id TEXT NOT NULL,
-                role TEXT NOT NULL,
+                role TEXT NOT NULL CHECK (role IN ('user','assistant')),
                 content TEXT NOT NULL,
                 created_at TEXT NOT NULL,
-                FOREIGN KEY (session_id) REFERENCES sessions(id)
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
             )
             """
         )

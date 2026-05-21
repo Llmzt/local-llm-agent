@@ -54,7 +54,7 @@ class ChatResponse(BaseModel):
 
 #依赖隔离
 def get_session_store() -> SessionStore:
-    """创建session_store;后续可以用于测试时monkeypatch"""
+    """创建session_store;后续可以用于测试时monkeypatch进行临时替代函数"""
     return SessionStore()
 
 #-----------异常处理-------------
@@ -75,7 +75,7 @@ def build_error_response(status_code:int,code: str, message:str)->JSONResponse:
 async def handle_validation_error(request: Request,exc: RequestValidationError)->JSONResponse:
     """请求参数不合法响应"""
     logger.info("request validation failed: %s",exc)
-    return build_error_response(status_code=422, code="INVALID_REQUEST",message="请求参数不合法"),
+    return build_error_response(status_code=422, code="INVALID_REQUEST",message="请求参数不合法")
 
 @app.exception_handler(HTTPException)
 async def handle_http_error(request: Request, exc: HTTPException,)->JSONResponse:
@@ -128,7 +128,7 @@ def chat(request: ChatRequest) -> ChatResponse:
     if not user_input:
         raise HTTPException(status_code=422, detail="message 不能为空。")
     
-    store = SessionStore()
+    store = get_session_store()
     session_id = store.ensure_session(request.session_id)
 
     messages = create_history() + store.get_history(session_id)

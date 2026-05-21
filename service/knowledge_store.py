@@ -1,11 +1,14 @@
-"""SQLite 知识库数据层：建表和查询。"""
+"""SQLite 知识库数据层：建表、写入和查询。"""
 
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
+
+from service.env import PROJECT_ROOT
+from service.sqlite_store import SQLiteStore
 from service.errors import KnowledgeError
 
-DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "database" / "knowledge.db"
+DEFAULT_DB_PATH = PROJECT_ROOT / "database" / "knowledge.db"
 
 
 @dataclass(frozen=True)
@@ -16,17 +19,17 @@ class KnowledgeItem:
     keywords: str
 
 
-class KnowledgeStore:
-    """最小 SQLite 数据访问对象。"""
+class KnowledgeStore(SQLiteStore):
+    """知识库 SQLite 数据访问对象。"""
 
     def __init__(self, db_path: Path | str = DEFAULT_DB_PATH):
-        self.db_path = Path(db_path)
+        super().__init__(db_path)#调用父类方法,对当前路径数据库公共属性进行初始化
 
     def search(self, query: str, limit: int = 3) -> list[KnowledgeItem]:
         """按标题、正文、关键词模糊查询知识。"""
         try:
-            with self.connect() as conn:
-                self.ensure_table(conn)
+            with self.transaction() as conn:
+                self.ensure_tables(conn)
                 rows = conn.execute(
                     """
                     SELECT id, title, content, keywords
@@ -46,32 +49,6 @@ class KnowledgeStore:
             ) from exc
 
         return [self.row_to_item(row) for row in rows]
-    def connect(self) -> sqlite3.Connection:
-        """连接数据库；如果目录不存在就创建目录。"""
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        return sqlite3.connect(self.db_path)
-
-    def ensure_table(self, conn: sqlite3.Connection) -> None:
-        """保证知识表存在。"""
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS knowledge (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                content TEXT NOT NULL,
-                keywords TEXT
-            )
-            """
-        )
-
-    def row_to_item(self, row) -> KnowledgeItem:
-        """把 SQLite 行转换成 KnowledgeItem。"""
-        return KnowledgeItem(
-            id=int(row[0]),
-            title=str(row[1]),
-            content=str(row[2]),
-            keywords=str(row[3] or ""),
-        )
 
     def add(self, title: str, content: str, keywords: str = "") -> KnowledgeItem:
         """新增一条知识，并返回写入后的 KnowledgeItem。"""
@@ -85,8 +62,8 @@ class KnowledgeStore:
             raise KnowledgeError("empty knowledge content", user_message="知识内容不能为空。")
 
         try:
-            with self.connect() as conn:
-                self.ensure_table(conn)
+            with self.transaction() as conn:
+                self.ensure_tables(conn)
                 cursor = conn.execute(
                     """
                     INSERT INTO knowledge (title, content, keywords)
@@ -94,7 +71,6 @@ class KnowledgeStore:
                     """,
                     (title, content, keywords),
                 )
-                conn.commit()
                 item_id = int(cursor.lastrowid)
         except sqlite3.Error as exc:
             raise KnowledgeError(
@@ -108,3 +84,27 @@ class KnowledgeStore:
             content=content,
             keywords=keywords,
         )
+
+    def ensure_tables(self, conn: sqlite3.Connection) -> None:
+        """保证知识表存在。"""
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS knowledge (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                keywords TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+
+    def row_to_item(self, row) -> KnowledgeItem:
+        """把 SQLite 行转换成 KnowledgeItem。"""
+        return KnowledgeItem(
+            id=int(row["id"]),
+            title=str(row["title"]),
+            content=str(row["content"]),
+            keywords=str(row["keywords"] or ""),
+        )
+
+    
