@@ -6,3 +6,5 @@ venv/
 .env
 logs/
 database/*.db
+frontend/node_modules/
+frontend/dist/

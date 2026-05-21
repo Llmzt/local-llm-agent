@@ -1,0 +1,56 @@
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>agent1</title>
+  </head>
+  <body>
+    <div id="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-title">chat_agent</div>
+          <div class="brand-subtitle">Local Agent</div>
+        </div>
+
+        <button id="newSessionButton" class="secondary-button" type="button">
+          新会话
+        </button>
+
+        <div class="session-panel">
+          <div class="panel-label">Session</div>
+          <div id="sessionId" class="session-id">未创建</div>
+        </div>
+
+        <div class="status-panel">
+          <div class="panel-label">API</div>
+          <div id="apiStatus" class="api-status">未连接</div>
+        </div>
+      </aside>
+
+      <main class="chat-shell">
+        <header class="chat-header">
+          <div>
+            <h1>Agent Chat</h1>
+            <p>命令行 Agent 的 Web 对话界面</p>
+          </div>
+        </header>
+
+        <section id="messages" class="messages"></section>
+
+        <form id="chatForm" class="composer">
+          <textarea
+            id="messageInput"
+            rows="2"
+            placeholder="输入消息，例如：现在几点？"
+            autocomplete="off"
+          ></textarea>
+          <button id="sendButton" type="submit">发送</button>
+        </form>
+      </main>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

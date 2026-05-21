@@ -1,5 +1,5 @@
 """web API入口"""
-
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -19,6 +19,17 @@ from service.session_store import SessionStore
 logger = get_logger(__name__)
 
 app = FastAPI(title="Local Agent API")
+
+app.add_middleware(
+    CORSMiddleware,#中间件跨域
+    allow_origins=[#访问后端的前端白名单
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+    ],
+    allow_credentials = True,#允许携带cookie等身份信息
+    allow_methods = ["*"],#允许全部请求方法
+    allow_headers = ["*"],#允许全部请求头
+)
 
 #统一api返回格式
 class ErrorInfo(BaseModel):
