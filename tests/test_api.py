@@ -122,3 +122,35 @@ def test_get_session_history_returns_404_when_missing(tmp_path, monkeypatch):
     assert body["ok"] is False
     assert body["data"] is None
     assert body["error"]["code"] == "HTTP_ERROR"
+
+def test_list_sessions(tmp_path, monkeypatch):
+    client = create_client(tmp_path, monkeypatch)
+
+    first = client.post("/chat", json={"message": "现在几点？"})
+    session_id = first.json()["data"]["session_id"]
+
+    response = client.get("/sessions")
+
+    assert response.status_code == 200
+
+    body = response.json()
+    assert body["ok"] is True
+    assert body["data"]["sessions"][0]["session_id"] == session_id
+
+
+def test_delete_session_api(tmp_path, monkeypatch):
+    client = create_client(tmp_path, monkeypatch)
+
+    first = client.post("/chat", json={"message": "现在几点？"})
+    session_id = first.json()["data"]["session_id"]
+
+    response = client.delete(f"/sessions/{session_id}")
+
+    assert response.status_code == 200
+
+    body = response.json()
+    assert body["ok"] is True
+    assert body["data"]["deleted"] is True
+
+    missing = client.get(f"/sessions/{session_id}")
+    assert missing.status_code == 404

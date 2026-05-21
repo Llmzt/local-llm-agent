@@ -187,6 +187,48 @@ class SessionStore(SQLiteStore):
             """
         )
 
+    def list_sessions(self,limit: int = 50) ->list[dict]:
+        """列出最近对话"""
+        try:
+            with self.connection() as conn:
+                self.ensure_tables(conn)
+                rows = conn.execute(
+                    """
+                SELECT
+                    s.id,
+                    s.created_at,
+                    s.updated_at,
+                    COUNT(m.id) AS message_count,
+                    (
+                        SELECT content
+                        FROM messages
+                        WHERE session_id = s.id AND role = 'user'
+                        ORDER BY id
+                        LIMIT 1
+                    ) AS title
+                FROM sessions s
+                LEFT JOIN messages m ON m.session_id = s.id
+                GROUP BY s.id
+                ORDER BY s.updated_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        except sqlite3.Error as exc:
+            raise SessionError(f"list sessions failed:{exc}",user_message="读取会话列表失败",)from exc
+        return [
+        {
+            "session_id": row["id"],
+            "title": row["title"] or "新会话",
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "message_count": int(row["message_count"]),
+        }
+        for row in rows
+    ]
+
+                
+
     def delete_session(self,session_id:str)->bool:
         """删除对话，关联message由数据库级联删除"""
         try:

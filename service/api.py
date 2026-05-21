@@ -31,7 +31,7 @@ app.add_middleware(
     allow_headers = ["*"],#允许全部请求头
 )
 
-#统一api返回格式
+#---------------统一api返回格式-----------------
 class ErrorInfo(BaseModel):
     code:str
     message:str
@@ -72,12 +72,37 @@ class ChatResponse(BaseModel):
     data: ChatData
     error: ErrorInfo | None = None
 
+class SessionSummaryItem(BaseModel):
+    session_id:str
+    title: str
+    created_at:str
+    updated_at:str
+    message_count: int
+
+class SessionListData(BaseModel):
+    sessions:list[SessionSummaryItem]
+
+class SessionListResponse(BaseModel):
+    ok:bool
+    data:SessionListData
+    error:ErrorInfo| None = None
+
+class DeleteSessionData(BaseModel):
+    deleted: bool
+    session_id: str
+
+class DeleteSessionResponse(BaseModel):
+    ok:bool
+    data:DeleteSessionData
+    error: ErrorInfo | None = None
+
+
 #依赖隔离
 def get_session_store() -> SessionStore:
     """创建session_store;后续可以用于测试时monkeypatch进行临时替代函数"""
     return SessionStore()
 
-#-----------异常响应-------------
+#----------------------异常响应接口----------------------
 def build_error_response(status_code:int,code: str, message:str)->JSONResponse:
     """统一错误响应格式"""
     return JSONResponse(status_code=status_code,
@@ -130,7 +155,7 @@ async def handle_unexpected_error(request: Request,exc: Exception,)->JSONRespons
     return build_error_response(status_code=500,code="INTERNAL_ERROR",message="程序发生未知错误，请查看日志。",)
 
 
-#---------正常响应--------
+#-----------------------正常响应接口-----------------------
 @app.get("/health",response_model=HealthResponse) #客户端get + health两个动作时，执行health响应
 def health() ->HealthResponse:
     """健康检查接口"""
@@ -159,11 +184,7 @@ def get_session_history(session_id:str = Path(min_length=1,max_length=128))->Ses
         error=None,
     )
 
-
-@app.post(
-    "/chat",
-    response_model=ChatResponse,
-)
+@app.post("/chat",response_model=ChatResponse)
 def chat(request: ChatRequest) -> ChatResponse:
     """聊天接口：按 session_id 读取、更新并保存多轮历史。"""
     user_input = request.message.strip()
@@ -187,5 +208,33 @@ def chat(request: ChatRequest) -> ChatResponse:
     return ChatResponse(
         ok=True,
         data=ChatData(reply=reply,session_id=session_id,history=messages,),
+        error=None,
+    )
+
+@app.get("/sessions",response_model=SessionListResponse)
+def list_sessions() ->SessionListResponse:
+    """列出最近对话"""
+    store = get_session_store()
+    sessions = store.list_sessions()
+
+    return SessionListResponse(ok=True,data=SessionListData(sessions=sessions),error=None)
+
+@app.delete("/sessions/{session_id}", response_model=DeleteSessionResponse)
+def delete_session(
+    session_id: str = Path(min_length=1, max_length=128),
+) -> DeleteSessionResponse:
+    """删除指定 session。"""
+    store = get_session_store()
+    deleted = store.delete_session(session_id)
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="session 不存在")
+
+    return DeleteSessionResponse(
+        ok=True,
+        data=DeleteSessionData(
+            deleted=True,
+            session_id=session_id,
+        ),
         error=None,
     )

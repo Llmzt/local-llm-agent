@@ -78,3 +78,17 @@ def test_session_exists(tmp_path):
 
     assert store.session_exists(session_id) is True
     assert store.session_exists("missing-session") is False
+
+def test_list_sessions(tmp_path):
+    store = SessionStore(tmp_path / "sessions.db")
+    session_id = store.create_session()
+
+    store.append_message(session_id, "user", "你好")
+    store.append_message(session_id, "assistant", "你好，有什么可以帮你？")
+
+    sessions = store.list_sessions()
+
+    assert len(sessions) == 1
+    assert sessions[0]["session_id"] == session_id
+    assert sessions[0]["title"] == "你好"
+    assert sessions[0]["message_count"] == 2

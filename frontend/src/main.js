@@ -1,4 +1,7 @@
+
 import "./styles.css";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
 const SESSION_KEY = "agent1.session_id";
@@ -11,6 +14,10 @@ const sendButtonEl = document.querySelector("#sendButton");
 const newSessionButtonEl = document.querySelector("#newSessionButton");
 const sessionIdEl = document.querySelector("#sessionId");
 const apiStatusEl = document.querySelector("#apiStatus");
+//DOM引用
+const refreshSessionsButtonEl = document.querySelector("#refreshSessionsButton");
+const deleteSessionButtonEl = document.querySelector("#deleteSessionButton");
+const sessionListEl = document.querySelector("#sessionList");
 
 let sessionId = localStorage.getItem(SESSION_KEY);//读取浏览器存储的对话ID
 let localMessages = [];
@@ -20,6 +27,7 @@ renderSessionId();//显示当前 session_id
 renderMessages();//初始化历史聊天记录
 checkHealth();//检查后端 API 是否能连接
 loadSavedSession();
+loadSessionList();//加载对话列表
 
 
 formEl.addEventListener("submit", async (event) => {
@@ -97,7 +105,7 @@ async function sendChatMessage(message) {
     payload.session_id = sessionId;
   }
 
-  const response = await fetch(`${API_BASE_URL}/chat`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}/chat`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -110,7 +118,7 @@ async function sendChatMessage(message) {
 
 async function checkHealth() {
   try {
-    const response = await fetch(`${API_BASE_URL}/health`);
+    const response = await fetchWithRetry(`${API_BASE_URL}/health`);
     const body = await response.json();
 
     if (response.ok && body.ok) {
@@ -133,7 +141,7 @@ async function loadSavedSession() {//自动加载历史对话
   }
 
   try {
-    const response = await fetch(
+    const response = await fetchWithRetry(
       `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}`,
     );
     const body = await response.json();
@@ -211,7 +219,7 @@ function updateLastMessageContent(content) {
     return;
   }
 
-  lastContentEl.textContent = content;
+  lastContentEl.innerHTML = renderMarkdown(content);//markdown渲染
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
@@ -226,7 +234,7 @@ function removeThinkingMessages() {
   renderMessages();
 }
 
-function renderMessages() {//根据 localMessages 重新画出聊天记录
+function renderMessages() {//对话渲染
   messagesEl.innerHTML = "";//清空原有消息
 
   if (localMessages.length === 0) {
@@ -251,7 +259,12 @@ function renderMessages() {//根据 localMessages 重新画出聊天记录
     if (message.role === "thinking") {
     contentEl.appendChild(createThinkingIndicator());
     } else {
+    if (message.role === "assistant") {
+    contentEl.innerHTML = renderMarkdown(message.content);//对助手消息进行markdown渲染
+                                                          //用户消息不渲染，避免用户输入HTML被执行
+    } else {
     contentEl.textContent = message.content;
+    }
     }
 
     itemEl.appendChild(roleEl);
@@ -297,4 +310,135 @@ function getRoleLabel(role) {
   }
 
   return "错误";
+}
+
+//---------------------对话列表-----------------------
+async function loadSessionList() {
+  try {
+    const response = await fetchWithRetry(`${API_BASE_URL}/sessions`);
+    const body = await response.json();
+
+    if (!response.ok || !body.ok) {
+      showError(body.error?.message || "加载会话列表失败。");
+      return;
+    }
+
+    renderSessionList(body.data.sessions);
+  } catch {
+    showError("无法加载会话列表，请确认后端服务已启动。");
+  }
+}
+
+function renderSessionList(sessions) {
+  sessionListEl.innerHTML = "";
+
+  if (sessions.length === 0) {
+    const emptyEl = document.createElement("div");
+    emptyEl.className = "session-list-empty";
+    emptyEl.textContent = "暂无历史会话";
+    sessionListEl.appendChild(emptyEl);
+    return;
+  }
+
+  for (const item of sessions) {
+    const buttonEl = document.createElement("button");
+    buttonEl.type = "button";
+    buttonEl.className = "session-item";
+
+    if (item.session_id === sessionId) {
+      buttonEl.classList.add("session-item-active");
+    }
+
+    buttonEl.innerHTML = `
+      <span class="session-item-title"></span>
+      <span class="session-item-meta">${item.message_count} 条消息</span>
+    `;
+
+    buttonEl.querySelector(".session-item-title").textContent = item.title;
+
+    buttonEl.addEventListener("click", async () => {
+      sessionId = item.session_id;
+      localStorage.setItem(SESSION_KEY, sessionId);
+      renderSessionId();
+      await loadSavedSession();
+      await loadSessionList();
+    });
+
+    sessionListEl.appendChild(buttonEl);
+  }
+}
+
+//-----------------------删除对话---------------------
+deleteSessionButtonEl.addEventListener("click", async () => {
+  if (!sessionId) {
+    showError("当前没有可删除的会话。");
+    return;
+  }
+
+  const shouldDelete = window.confirm("确定删除当前会话吗？");
+  if (!shouldDelete) {
+    return;
+  }
+
+  try {
+    const response = await fetchWithRetry(
+      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}`,
+      { method: "DELETE" },
+    );
+    const body = await response.json();
+
+    if (!response.ok || !body.ok) {
+      showError(body.error?.message || "删除会话失败。");
+      return;
+    }
+
+    sessionId = null;
+    localMessages = [];
+    localStorage.removeItem(SESSION_KEY);
+    renderSessionId();
+    renderMessages();
+    await loadSessionList();
+  } catch {
+    showError("无法删除会话，请确认后端服务已启动。");
+  }
+});
+
+
+refreshSessionsButtonEl.addEventListener("click", () => {
+  loadSessionList();
+});
+
+//新对话按钮也加入刷新
+newSessionButtonEl.addEventListener("click", () => {
+  sessionId = null;
+  localMessages = [];
+  localStorage.removeItem(SESSION_KEY);
+  renderMessages();
+  renderSessionId();
+  loadSessionList();
+  inputEl.focus();
+});
+
+//api重试的fetch
+async function fetchWithRetry(url, options = {}, retries = 1) {
+  try {
+    return await fetch(url, options);
+  } catch (error) {
+    if (retries <= 0) {
+      throw error;
+    }
+
+    await sleep(300);
+    return fetchWithRetry(url, options, retries - 1);//递归重试
+  }
+}
+
+function renderMarkdown(text) {//markdown渲染
+  const html = marked.parse(text || "");
+  return DOMPurify.sanitize(html);
+}
+
+//错误提示函数
+function showError(message) {
+  appendMessage("error", message);
 }
