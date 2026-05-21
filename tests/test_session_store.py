@@ -71,3 +71,10 @@ def test_delete_session_returns_false_when_missing(tmp_path):
     deleted = store.delete_session("missing-session")
 
     assert deleted is False
+
+def test_session_exists(tmp_path):
+    store = SessionStore(tmp_path / "sessions.db")
+    session_id = store.create_session()
+
+    assert store.session_exists(session_id) is True
+    assert store.session_exists("missing-session") is False

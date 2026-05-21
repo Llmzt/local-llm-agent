@@ -264,3 +264,49 @@ textarea:focus {
     width: 100%;
   }
 }
+
+.message-thinking {
+  align-self: flex-start;
+}
+
+.message-thinking .message-content {
+  width: 48px;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border: 1px solid #dce3ea;
+}
+
+.thinking-indicator {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+}
+
+.thinking-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #1f6feb;
+  animation: thinking-pulse 1s ease-in-out infinite;
+}
+
+@keyframes thinking-pulse {
+  0% {
+    opacity: 0.35;
+    transform: scale(0.72);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0.35;
+    transform: scale(0.72);
+  }
+}

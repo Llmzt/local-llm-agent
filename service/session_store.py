@@ -83,6 +83,23 @@ class SessionStore(SQLiteStore):
         
         return session_id
     
+    def session_exists(self,session_id:str) ->bool:
+        """判断会话是否存在"""
+        try:
+            with self.connection() as conn:
+                self.ensure_tables(conn)
+                row = conn.execute(
+                    "SELECT id FROM sessions WHERE id = ?",
+                    (session_id,),
+                ).fetchone()
+        except sqlite3.Error as exc:
+            raise SessionError(
+                f"session exists check failed:{exc}",
+                user_message="检查会话失败。"
+            )from exc
+        
+        return row is not None
+
     def get_history(self, session_id:str) ->list[dict[str,str]]:
         """读取某个历史对话，不包含system promt"""
         try:

@@ -89,3 +89,36 @@ def test_chat_rejects_blank_message(tmp_path, monkeypatch):
     assert body["ok"] is False
     assert body["data"] is None
     assert body["error"]["code"] == "HTTP_ERROR"
+
+
+def test_get_session_history(tmp_path, monkeypatch):
+    client = create_client(tmp_path, monkeypatch)
+
+    first = client.post(
+        "/chat",
+        json={"message": "现在几点？"},
+    )
+
+    session_id = first.json()["data"]["session_id"]
+
+    response = client.get(f"/sessions/{session_id}")
+
+    assert response.status_code == 200
+
+    body = response.json()
+    assert body["ok"] is True
+    assert body["data"]["session_id"] == session_id
+    assert len(body["data"]["history"]) >= 2
+
+
+def test_get_session_history_returns_404_when_missing(tmp_path, monkeypatch):
+    client = create_client(tmp_path, monkeypatch)
+
+    response = client.get("/sessions/missing-session")
+
+    assert response.status_code == 404
+
+    body = response.json()
+    assert body["ok"] is False
+    assert body["data"] is None
+    assert body["error"]["code"] == "HTTP_ERROR"

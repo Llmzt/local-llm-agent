@@ -1,6 +1,6 @@
 """web API入口"""
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request,Path
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -52,6 +52,15 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1,max_length=4000)
     session_id: str | None = Field(default=None, max_length=128)#限制session_id字段长度，防止恶意输入占用数据库、进行dos攻击等
 
+class SessionData(BaseModel):
+    session_id: str
+    history: list[MessageItem]
+
+class SessionResponse(BaseModel):
+    ok:bool
+    data: SessionData
+    error: ErrorInfo | None = None
+
 #规范化响应结构，数据与状态分离
 class ChatData(BaseModel):
     reply: str
@@ -68,7 +77,7 @@ def get_session_store() -> SessionStore:
     """创建session_store;后续可以用于测试时monkeypatch进行临时替代函数"""
     return SessionStore()
 
-#-----------异常处理-------------
+#-----------异常响应-------------
 def build_error_response(status_code:int,code: str, message:str)->JSONResponse:
     """统一错误响应格式"""
     return JSONResponse(status_code=status_code,
@@ -120,7 +129,9 @@ async def handle_unexpected_error(request: Request,exc: Exception,)->JSONRespons
     logger.exception("unexpected error in api")
     return build_error_response(status_code=500,code="INTERNAL_ERROR",message="程序发生未知错误，请查看日志。",)
 
-@app.get("/health",response_model=HealthResponse,) #客户端get + health两个动作时，执行health响应
+
+#---------正常响应--------
+@app.get("/health",response_model=HealthResponse) #客户端get + health两个动作时，执行health响应
 def health() ->HealthResponse:
     """健康检查接口"""
     return HealthResponse(
@@ -128,6 +139,26 @@ def health() ->HealthResponse:
         data=HealthData(status="ok"),
         error=None,
     )
+
+@app.get("/sessions/{session_id}",response_model=SessionResponse,)
+def get_session_history(session_id:str = Path(min_length=1,max_length=128))->SessionResponse:
+    """读取指定session的历史消息"""
+    store = get_session_store()
+
+    if not store.session_exists(session_id):
+        raise HTTPException(status_code=404,detail="session 不存在")
+    
+    history  = store.get_history(session_id)
+
+    return SessionResponse(
+        ok = True,
+        data=SessionData(
+            session_id = session_id,
+            history=history,
+        ),
+        error=None,
+    )
+
 
 @app.post(
     "/chat",
