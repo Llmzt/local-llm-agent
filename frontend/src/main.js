@@ -252,7 +252,7 @@ function renderMessages() {//对话渲染
     } else {
     if (message.role === "assistant") {
     contentEl.innerHTML = renderMarkdown(message.content);//对助手消息进行markdown渲染
-                                                          //用户消息不渲染，避免用户输入HTML被执行
+                                                          //用户消息不渲染，防止执行用户输入进行XSS注入
     } else {
     contentEl.textContent = message.content;
     }

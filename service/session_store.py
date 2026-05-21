@@ -227,8 +227,6 @@ class SessionStore(SQLiteStore):
         for row in rows
     ]
 
-                
-
     def delete_session(self,session_id:str)->bool:
         """删除对话，关联message由数据库级联删除"""
         try:
