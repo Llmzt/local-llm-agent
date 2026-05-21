@@ -10,6 +10,7 @@
 - 本地工具路由
 - SQLite 知识库查询与写入
 - API session/history 持久化
+- 轻量 Web 前端
 - pytest 自动化测试
 
 核心流程：
@@ -38,6 +39,7 @@
 │   ├── knowledge.py          # 知识库查询工具
 │   ├── knowledge_write.py    # 知识库写入工具
 │   └── time.py               # 当前时间工具
+├── frontend/                 # Vite 原生前端
 ├── tests/                    # pytest 测试
 ├── requirements.txt          # 运行依赖
 ├── requirements-dev.txt      # 测试依赖
@@ -65,6 +67,13 @@ venv/bin/pip install -r requirements.txt
 
 ```bash
 venv/bin/pip install -r requirements-dev.txt
+```
+
+如需运行前端：
+
+```bash
+cd frontend
+npm install
 ```
 
 ## 配置
@@ -141,6 +150,29 @@ curl -X POST http://127.0.0.1:8000/chat \
   -d '{"message":"今天日期？","session_id":"上一次返回的 session_id"}'
 ```
 
+## 运行前端
+
+先启动后端 API：
+
+```bash
+venv/bin/uvicorn service.api:app --host 127.0.0.1 --port 8000
+```
+
+再启动前端：
+
+```bash
+cd frontend
+npm run dev
+```
+
+浏览器打开：
+
+```text
+http://127.0.0.1:5173
+```
+
+前端会调用 `/chat`，保存当前 `session_id`，并展示同一会话下的历史消息。
+
 ## 知识库用法
 
 查询知识库：
@@ -188,9 +220,20 @@ venv/bin/python -m pytest -q
 - 知识库输入解析
 - SQLite 知识库读写
 - session/history 持久化
+- SQLite 连接、事务和外键约束
 - 工具路由
 - Agent 主流程
 - FastAPI 基础接口
 
 测试使用临时数据库，不会污染真实的 `database/*.db`。
 
+## 本地运行产物
+
+```text
+.env
+venv/
+logs/
+database/*.db
+frontend/node_modules/
+frontend/dist/
+```
