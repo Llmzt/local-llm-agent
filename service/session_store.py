@@ -228,10 +228,14 @@ class SessionStore(SQLiteStore):
     ]
 
     def delete_session(self,session_id:str)->bool:
-        """删除对话，关联message由数据库级联删除"""
+        """删除对话；先删消息以兼容没有级联删除的旧数据库。"""
         try:
             with self.transaction() as conn:
                 self.ensure_tables(conn)
+                conn.execute(
+                    "DELETE FROM messages WHERE session_id = ?",
+                    (session_id,),
+                )
                 cursor = conn.execute(
                     "DELETE FROM sessions WHERE id = ?",
                     (session_id,),

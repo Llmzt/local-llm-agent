@@ -1,6 +1,7 @@
 """模型调用：封装 CLI Agent 需要的聊天补全。"""
 
 import time
+from collections.abc import Iterator
 
 from service.config import load_config
 from service.logger import get_logger
@@ -118,3 +119,33 @@ def request_with_retry(create_request):
                 ) from exc
 
             time.sleep(min(2**attempt, 4))
+
+def stream_llm_chunks(messages:list[dict[str,str]])->Iterator[str]:
+    """调用模型并主端产出文本chunk"""
+    config = get_config()
+    request = {
+        "model": config.model,
+        "messages":messages,
+        "stream":True,
+    }
+
+    logger.info("streaming llm:model=%s",config.model)
+
+    response = request_with_retry(
+        lambda: get_client().chat.completions.create(**request)  #lambda:保证get_clietn可以重复传入，保护重试机制
+    )
+
+    has_content = False
+
+    for chunk in response:#流式输出
+        if not chunk.choices:
+            continue
+        delta = chunk.choices[0].delta.content  #不断读取模型新生成的一小段文字choices[0]
+        if not delta:
+            continue
+            
+        has_content = True      
+        yield delta     #逐个Delta返回
+
+    if not has_content:
+        raise LLMError("llm returned empty content",user_message="模型返回内容为空。")

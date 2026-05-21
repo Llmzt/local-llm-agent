@@ -72,6 +72,65 @@ def test_delete_session_returns_false_when_missing(tmp_path):
 
     assert deleted is False
 
+
+def test_delete_session_supports_legacy_schema_without_cascade(tmp_path):
+    store = SessionStore(tmp_path / "sessions.db")
+    session_id = "legacy-session"
+
+    with store.transaction() as conn:
+        conn.execute(
+            """
+            CREATE TABLE sessions (
+                id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                role TEXT NOT NULL CHECK (role IN ('user','assistant')),
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (session_id) REFERENCES sessions(id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO sessions (id, created_at, updated_at)
+            VALUES (?, ?, ?)
+            """,
+            (session_id, "2026-01-01 00:00:00", "2026-01-01 00:00:00"),
+        )
+        conn.execute(
+            """
+            INSERT INTO messages (session_id, role, content, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (session_id, "user", "你好", "2026-01-01 00:00:00"),
+        )
+
+    deleted = store.delete_session(session_id)
+
+    assert deleted is True
+
+    with store.connect() as conn:
+        messages = conn.execute(
+            "SELECT id FROM messages WHERE session_id = ?",
+            (session_id,),
+        ).fetchall()
+        sessions = conn.execute(
+            "SELECT id FROM sessions WHERE id = ?",
+            (session_id,),
+        ).fetchall()
+
+    assert messages == []
+    assert sessions == []
+
 def test_session_exists(tmp_path):
     store = SessionStore(tmp_path / "sessions.db")
     session_id = store.create_session()

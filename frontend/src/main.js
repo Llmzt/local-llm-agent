@@ -30,6 +30,14 @@ loadSavedSession();
 loadSessionList();//加载对话列表
 
 
+function nextFrame() {//保证将动画渲染完再进行下一帧，防止吞动画
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      resolve();
+    });
+  });
+}
+
 formEl.addEventListener("submit", async (event) => {
   event.preventDefault();//组织浏览器默认提交行为，防止每次提交表单都自动刷新
 
@@ -43,24 +51,14 @@ formEl.addEventListener("submit", async (event) => {
   appendMessage("thinking", "");
   setLoading(true);//进入加载，防止用户重复提交
 
+  await nextFrame();
+
   try {
-    const body = await sendChatMessage(text);//发送给后端
+    await streamChatMessage(text);//开始流式请求
 
+  } catch {//无法连接后端
     removeThinkingMessages();
-
-    if (!body.ok) {//处理后端的失败响应(能连接但后端报错)
-      appendMessage("error", body.error?.message || "请求失败。");
-      return;
-    }
-
-    const data = body.data;
-    sessionId = data.session_id;
-    localStorage.setItem(SESSION_KEY, sessionId);//保存对话ID
-
-    await renderHistoryWithStreamingReply(data.history);
-    renderSessionId()//重新显示对话ID
-  } catch (error) {//无法连接后端
-    removeThinkingMessages();
+    removeEmptyAssistantDraft();
     appendMessage("error", "无法连接 API，请确认后端服务已启动。");
   } finally {//无论请求成功还是失败,都恢复按钮和输入框,然后让输入框重新获得焦点
     setLoading(false);
@@ -432,4 +430,143 @@ function renderMarkdown(text) {//markdown渲染
 //错误提示函数
 function showError(message) {
   appendMessage("error", message);
+}
+
+//-------------------处理sse流式输出------------------
+
+async function streamChatMessage(message) {
+  const payload = { message };
+
+  if (sessionId) {
+    payload.session_id = sessionId;
+  }
+
+  const response = await fetch(`${API_BASE_URL}/chat/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok || !response.body) {
+    throw new Error("stream request failed");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() || "";
+
+    for (const part of parts) {
+      handleSseMessage(part);
+    }
+  }
+
+  if (buffer.trim()) {
+    handleSseMessage(buffer);
+  }
+}
+
+function handleSseMessage(rawMessage) {
+  const lines = rawMessage.split("\n");
+  let event = "message";
+  let dataText = "";
+
+  for (const line of lines) {
+    if (line.startsWith("event: ")) {
+      event = line.slice("event: ".length).trim();
+      continue;
+    }
+
+    if (line.startsWith("data: ")) {
+      dataText += line.slice("data: ".length);
+    }
+  }
+
+  if (!dataText) {
+    return;
+  }
+
+  const data = JSON.parse(dataText);
+
+  if (event === "session") {
+    sessionId = data.session_id;
+    localStorage.setItem(SESSION_KEY, sessionId);
+    renderSessionId();
+    return;
+  }
+
+  if (event === "chunk") {
+    appendAssistantChunk(data.content || "");
+    return;
+  }
+
+  if (event === "done") {
+    sessionId = data.session_id;
+    localStorage.setItem(SESSION_KEY, sessionId);
+    renderSessionId();
+
+    if (Array.isArray(data.history)) {
+      localMessages = data.history.filter((item) => item.role !== "system");
+      renderMessages();
+    }
+
+    loadSessionList();
+    return;
+  }
+
+  if (event === "error") {
+    removeThinkingMessages();
+    removeEmptyAssistantDraft();
+    appendMessage("error", data.message || "请求失败。");
+  }
+}
+
+function appendAssistantChunk(content) {
+  if (!content) {
+    return;
+  }
+
+  removeThinkingMessages();
+
+  let lastMessage = localMessages[localMessages.length - 1];
+
+  if (!lastMessage || lastMessage.role !== "assistant") {
+    lastMessage = {
+      role: "assistant",
+      content: "",
+    };
+    localMessages.push(lastMessage);
+    renderMessages();
+  }
+
+  lastMessage.content += content;
+  updateLastMessageContent(lastMessage.content);
+}
+
+
+function removeEmptyAssistantDraft() {
+  const lastMessage = localMessages[localMessages.length - 1];
+
+  if (
+    lastMessage &&
+    lastMessage.role === "assistant" &&
+    lastMessage.content === ""
+  ) {
+    localMessages.pop();
+    renderMessages();
+  }
 }

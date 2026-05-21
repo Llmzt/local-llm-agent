@@ -2,8 +2,10 @@
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, HTTPException, Request,Path
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse,StreamingResponse
 from pydantic import BaseModel, Field
+import json
+from collections.abc import Iterator
 
 from agent import (
     add_assistant_message,
@@ -11,6 +13,7 @@ from agent import (
     create_history,
     run_agent,
     trim_history,
+    run_agent_stream,
 )
 from service.errors import AppError, ConfigError, KnowledgeError,LLMError
 from service.logger import get_logger
@@ -30,6 +33,99 @@ app.add_middleware(
     allow_methods = ["*"],#允许全部请求方法
     allow_headers = ["*"],#允许全部请求头
 )
+
+#-----------------------------工具函数---------------------------------- 
+
+#依赖隔离,状态与行为分离
+def get_session_store() -> SessionStore:
+    """创建session_store;后续可以用于测试时monkeypatch进行临时替代函数"""
+    return SessionStore()
+
+
+"""
+数据格式：
+    后端内部：
+    dataclass / dict / list
+
+    接口校验：
+    Pydantic BaseModel
+
+    普通接口传输：
+    JSON
+
+    流式接口传输：
+    SSE + JSON data
+"""
+def sse_event(event: str,data: dict) ->str:
+    """把事件转换成SSE文本格式"""
+    return f"event: {event}\ndata: {json.dumps(data,ensure_ascii=False)}\n\n"#注意键值对空格格式
+
+def stream_chat_events(request: ChatStreamRequest) ->Iterator[str]:
+    """流式聊天事件生成器"""
+    user_input = request.message.strip()
+    if not user_input:
+        yield sse_event(
+            "error",
+            {
+                "code":"INVALID_REQUEST",
+                "message":"message 不能为空",
+            },
+        )
+        return
+    store = get_session_store()
+    session_id = store.ensure_session(request.session_id)
+    messages = create_history()+store.get_history(session_id)
+    messages = trim_history(messages)
+
+    add_user_message(messages, user_input)
+    store.append_message(session_id,"user",user_input)
+
+    yield sse_event(
+        "session",
+        {
+            "session_id":session_id,
+        },
+    )
+
+    full_reply = ""
+
+    try:
+        for chunk in run_agent_stream(messages):
+            full_reply+=chunk
+            yield sse_event(
+                "chunk",
+                {"content":chunk,
+                },
+            )
+        add_assistant_message(messages,full_reply)
+        store.append_message(session_id,"assistant",full_reply)
+
+        yield sse_event(
+            "done",
+            {
+                "reply":full_reply,
+                "session_id":session_id,
+                "history":messages,
+            },
+        )
+    except AppError as exc:
+        logger.exception("handled stream application error in api")
+        yield sse_event(
+            "error",
+            {
+                "code":"APP_ERROR",
+                "message":exc.user_message,
+            },
+        )
+    except Exception:
+        logger.exception("unexpected stream error in api")
+        yield sse_event(
+            "error",
+            {
+                "code":"INTERNAL_ERROR",
+                "message":"程序发生未知错误，请查看日志",
+            },
+        )
 
 #---------------统一api返回格式-----------------
 class ErrorInfo(BaseModel):
@@ -96,13 +192,15 @@ class DeleteSessionResponse(BaseModel):
     data:DeleteSessionData
     error: ErrorInfo | None = None
 
+class ChatStreamRequest(BaseModel):
+    """流式输出模型"""
+    message: str = Field(min_length=1,max_length=4000)
+    session_id: str | None = Field(default=None,max_length=128)
 
-#依赖隔离
-def get_session_store() -> SessionStore:
-    """创建session_store;后续可以用于测试时monkeypatch进行临时替代函数"""
-    return SessionStore()
+
 
 #----------------------异常响应接口----------------------
+"""捕获所有可能的异常，进行处理并统一日志入口（业务价值不高的错误只raise错误，无需第一时间写日志）"""
 def build_error_response(status_code:int,code: str, message:str)->JSONResponse:
     """统一错误响应格式"""
     return JSONResponse(status_code=status_code,
@@ -237,4 +335,16 @@ def delete_session(
             session_id=session_id,
         ),
         error=None,
+    )
+
+@app.post("/chat/stream") #流式输出响应
+def chat_stream(request:ChatStreamRequest)->StreamingResponse:
+    """SSE 流式聊天接口"""
+    return StreamingResponse(
+        stream_chat_events(request),
+        media_type="text/event-stream",#HTTP文本类型
+        headers={                       #HTTP响应头
+            "Cache-Control":"no-cache",#不要缓存，返回实时流
+            "X-Accel-Buffering":"no",   #立刻返回，不要缓冲
+        },
     )

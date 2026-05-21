@@ -1,12 +1,12 @@
 """Agent 主流程：决定走本地工具，还是交给普通 LLM。"""
 from service.tool_router import Tool, route_tool
-from service.llm import call_llm
+from service.llm import call_llm,stream_llm_chunks
 from skill.knowledge import search_knowledge
 from skill.time import get_current_time
-
 from skill.knowledge_write import add_knowledge
-
 from service.logger import get_logger
+
+from collections.abc import Iterator
 
 logger = get_logger(__name__)
 
@@ -97,3 +97,22 @@ def reply_with_text(text: str, stream_print: bool) -> str:
     if stream_print:
         print(text, end="", flush=True)
     return text
+
+def run_agent_stream(messages: list[dict[str,str]])->Iterator[str]:
+    """流式agent：本地工具直接返回一段，LLM按chunk返回"""
+
+    user_input  = messages[-1]["content"]
+
+    tool_reply = route_tool(user_input,TOOLS)
+    if tool_reply is not None:
+        yield tool_reply
+        return
+    
+    knowledge_reply  = search_knowledge(user_input)
+    if has_knowledge_result(knowledge_reply):
+        logger.info("route tp knowledge skill by implicit match")
+        yield knowledge_reply
+        return
+
+    logger.info("route to llm stream")
+    yield from stream_llm_chunks(messages)#yield from

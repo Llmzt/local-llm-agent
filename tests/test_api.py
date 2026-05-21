@@ -154,3 +154,20 @@ def test_delete_session_api(tmp_path, monkeypatch):
 
     missing = client.get(f"/sessions/{session_id}")
     assert missing.status_code == 404
+
+
+def test_chat_stream_with_time_tool(tmp_path, monkeypatch):
+    """测试时间工具（流式）"""
+    client = create_client(tmp_path, monkeypatch)
+
+    with client.stream(
+        "POST",
+        "/chat/stream",
+        json={"message": "现在几点？"},
+    ) as response:
+        assert response.status_code == 200
+        text = "".join(response.iter_text())
+
+    assert "event: session" in text
+    assert "event: chunk" in text
+    assert "event: done" in text
