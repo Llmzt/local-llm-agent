@@ -57,6 +57,11 @@
 
 ## 快速开始
 
+### 获取项目
+
+```bash
+git clone https://github.com/Llmzt/chat_agent.git
+cd chat_agent
 ### 环境要求
 
 - Python 3.12 或更高版本
@@ -88,6 +93,7 @@ cp .env.example .env
 ```bash
 API_KEY="your api key"
 ```
+
 
 ## 配置说明
 
