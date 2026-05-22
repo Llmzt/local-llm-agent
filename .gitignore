@@ -8,3 +8,4 @@ logs/
 database/*.db
 frontend/node_modules/
 frontend/dist/
+笔记.txt

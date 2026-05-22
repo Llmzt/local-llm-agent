@@ -6,16 +6,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from service.errors import AppError
+from service.errors import SessionError
 from service.env import PROJECT_ROOT
 from service.sqlite_store import SQLiteStore
 
 DEFAULT_SESSION_DB_PATH = PROJECT_ROOT / "database" / "sessions.db"
-
-class SessionError(AppError):
-    """会话存储相关异常"""
-
-    user_message = "会话读写失败，请稍后再试。"
 
 @dataclass(frozen=True)
 class SessionMessage:

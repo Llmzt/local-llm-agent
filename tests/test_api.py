@@ -1,4 +1,4 @@
-"""测试FASTAPI"""
+"""接口响应测试"""
 from fastapi.testclient import TestClient
 
 import service.api as api_module
@@ -75,7 +75,7 @@ def test_chat_reuses_session_id(tmp_path, monkeypatch):
     assert len(data["history"]) >= 5
 
 def test_chat_rejects_blank_message(tmp_path, monkeypatch):
-    """/chat 接口是否正确拒绝非法空消息请求"""
+    """非sse非法空消息请求响应测试"""
     client = create_client(tmp_path, monkeypatch)
 
     response = client.post(
@@ -88,7 +88,8 @@ def test_chat_rejects_blank_message(tmp_path, monkeypatch):
     body = response.json()
     assert body["ok"] is False
     assert body["data"] is None
-    assert body["error"]["code"] == "HTTP_ERROR"
+    assert body["error"]["code"] == "EMPTY_MESSAGE"
+    assert body["error"]["message"] == "message 不能为空"
 
 
 def test_get_session_history(tmp_path, monkeypatch):
@@ -171,3 +172,19 @@ def test_chat_stream_with_time_tool(tmp_path, monkeypatch):
     assert "event: session" in text
     assert "event: chunk" in text
     assert "event: done" in text
+
+def test_chat_stream_rejects_blank_message(tmp_path, monkeypatch):
+    """SSE空消息测试"""
+    client = create_client(tmp_path, monkeypatch)
+
+    with client.stream(
+        "POST",
+        "/chat/stream",
+        json={"message": "   "},
+    ) as response:
+        assert response.status_code == 200
+        text = "".join(response.iter_text())
+
+    assert "event: error" in text
+    assert "EMPTY_MESSAGE" in text
+    assert "message 不能为空" in text

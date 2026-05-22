@@ -15,7 +15,14 @@ from agent import (
     trim_history,
     run_agent_stream,
 )
-from service.errors import AppError, ConfigError, KnowledgeError,LLMError
+from service.errors import AppError, RequestError
+from service.error_response import (
+    app_error_payload,
+    error_payload,
+    http_error_payload,
+    unexpected_error_payload,
+    validation_error_payload,
+)
 from service.logger import get_logger
 from service.session_store import SessionStore
 
@@ -41,21 +48,6 @@ def get_session_store() -> SessionStore:
     """创建session_store;后续可以用于测试时monkeypatch进行临时替代函数"""
     return SessionStore()
 
-
-"""
-数据格式：
-    后端内部：
-    dataclass / dict / list
-
-    接口校验：
-    Pydantic BaseModel
-
-    普通接口传输：
-    JSON
-
-    流式接口传输：
-    SSE + JSON data
-"""
 def sse_event(event: str,data: dict) ->str:
     """把事件转换成SSE文本格式"""
     return f"event: {event}\ndata: {json.dumps(data,ensure_ascii=False)}\n\n"#注意键值对空格格式
@@ -64,12 +56,15 @@ def stream_chat_events(request: ChatStreamRequest) ->Iterator[str]:
     """流式聊天事件生成器"""
     user_input = request.message.strip()
     if not user_input:
+        exc = RequestError(
+            "empty chat message",
+            user_message="message 不能为空",
+            code="EMPTY_MESSAGE",
+            status_code=422,
+        )
         yield sse_event(
             "error",
-            {
-                "code":"INVALID_REQUEST",
-                "message":"message 不能为空",
-            },
+            app_error_payload(exc)["error"] #sse无需说明类型属性（event已具备），而json需要
         )
         return
     store = get_session_store()
@@ -112,19 +107,13 @@ def stream_chat_events(request: ChatStreamRequest) ->Iterator[str]:
         logger.exception("handled stream application error in api")
         yield sse_event(
             "error",
-            {
-                "code":"APP_ERROR",
-                "message":exc.user_message,
-            },
+            app_error_payload(exc)["error"]
         )
     except Exception:
         logger.exception("unexpected stream error in api")
         yield sse_event(
             "error",
-            {
-                "code":"INTERNAL_ERROR",
-                "message":"程序发生未知错误，请查看日志",
-            },
+            unexpected_error_payload()["error"]
         )
 
 #---------------统一api返回格式-----------------
@@ -145,6 +134,7 @@ class MessageItem(BaseModel):
     content: str
 
 class ChatRequest(BaseModel):
+    """pydantic 用户输入参数校验转换"""
     message: str = Field(min_length=1,max_length=4000)
     session_id: str | None = Field(default=None, max_length=128)#限制session_id字段长度，防止恶意输入占用数据库、进行dos攻击等
 
@@ -200,57 +190,37 @@ class ChatStreamRequest(BaseModel):
 
 
 #----------------------异常响应接口----------------------
+
 """捕获所有可能的异常，进行处理并统一日志入口（业务价值不高的错误只raise错误，无需第一时间写日志）"""
-def build_error_response(status_code:int,code: str, message:str)->JSONResponse:
+def build_error_response(status_code:int,payload:dict)->JSONResponse:
     """统一错误响应格式"""
     return JSONResponse(status_code=status_code,
-                        content={
-                            "ok":False,
-                            "data": None,
-                            "error":{
-                                "code": code,
-                                "message":message,
-                            }
-                        }
+                        content=payload
                         )
 
 @app.exception_handler(RequestValidationError)
 async def handle_validation_error(request: Request,exc: RequestValidationError)->JSONResponse:
     """请求参数不合法响应"""
     logger.info("request validation failed: %s",exc)
-    return build_error_response(status_code=422, code="INVALID_REQUEST",message="请求参数不合法")
+    return build_error_response(status_code=422, payload=validation_error_payload(exc))
 
 @app.exception_handler(HTTPException)
 async def handle_http_error(request: Request, exc: HTTPException,)->JSONResponse:
     """主动抛出的 HTTP 错误。"""
-    message = str(exc.detail) if exc.detail else "请求失败。"
-    return build_error_response(status_code=exc.status_code, code="HTTP_ERROR", message=message,)
+    return build_error_response(status_code=exc.status_code, payload=http_error_payload(exc))
 
 @app.exception_handler(AppError)
 async def handle_app_error(request: Request, exc: AppError,)->JSONResponse:
     """业务内可预期错误"""
     logger.exception("handled application error in api")
-
-    status_code = 400
-    code = "APP_ERROR"
-
-    if isinstance(exc, ConfigError):
-        status_code = 500
-        code = "CONFIG_ERROR"
-    elif isinstance(exc, LLMError):
-        status_code = 502
-        code = "LLM_ERROR"
-    elif isinstance(exc, KnowledgeError):
-        status_code = 400
-        code = "KNOWLEDGE_ERROR"
     
-    return build_error_response(status_code= status_code,code=code,message=exc.user_message,)
+    return build_error_response(status_code=exc.status_code,payload=app_error_payload(exc))
 
 @app.exception_handler(Exception)
 async def handle_unexpected_error(request: Request,exc: Exception,)->JSONResponse:
     """兜底，避免把Python异常细节暴露给客户端"""
     logger.exception("unexpected error in api")
-    return build_error_response(status_code=500,code="INTERNAL_ERROR",message="程序发生未知错误，请查看日志。",)
+    return build_error_response(status_code=500,payload=unexpected_error_payload())#不传exc，防止暴露异常细节
 
 
 #-----------------------正常响应接口-----------------------
@@ -287,7 +257,12 @@ def chat(request: ChatRequest) -> ChatResponse:
     """聊天接口：按 session_id 读取、更新并保存多轮历史。"""
     user_input = request.message.strip()
     if not user_input:
-        raise HTTPException(status_code=422, detail="message 不能为空。")
+        raise RequestError(
+            "empty chat message",
+            user_message="message 不能为空",
+            code="EMPTY_MESSAGE",
+            status_code=422,
+        )
     
     store = get_session_store()
     session_id = store.ensure_session(request.session_id)

@@ -21,10 +21,7 @@ def load_config() -> AppConfig:
 
     api_key = os.getenv("API_KEY", "").strip()
     if not api_key:
-        raise ConfigError(
-            "missing API_KEY environment variable",
-            user_message="缺失 API_KEY，请检查 .env 文件。",
-        )
+        raise ConfigError("missing API_KEY environment variable",)
 
     return AppConfig(
         api_key=api_key,
