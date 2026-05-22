@@ -26,8 +26,8 @@ SYSTEM_PROMPT = "你是一个极简中文助手。请直接回答用户问题，
 NO_KNOWLEDGE_RESULT = "没有找到相关知识。"
 EMPTY_KNOWLEDGE_QUERY = "请提供要查询的关键词。"
 
-TIME_WORDS = ("时间", "几点", "日期", "星期", "今天", "现在")
-KNOWLEDGE_WORDS = ("知识库", "查询", "搜索", "检索", "查一下")
+TIME_WORDS = ("什么时间", "现在几点", "什么日期")
+KNOWLEDGE_WORDS = ("知识库", "查询", "搜索", "检索")
 ADD_KNOWLEDGE_WORDS = ("添加知识", "新增知识", "写入知识")
 
 

@@ -1,109 +1,106 @@
-
 import "./styles.css";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
 const SESSION_KEY = "agent1.session_id";
+const DELETE_CONFIRM_MS = 4000;
 
-//获取变量元素，以便后续操作
 const messagesEl = document.querySelector("#messages");
 const formEl = document.querySelector("#chatForm");
 const inputEl = document.querySelector("#messageInput");
 const sendButtonEl = document.querySelector("#sendButton");
 const newSessionButtonEl = document.querySelector("#newSessionButton");
-const sessionIdEl = document.querySelector("#sessionId");
 const apiStatusEl = document.querySelector("#apiStatus");
-//DOM引用
-const refreshSessionsButtonEl = document.querySelector("#refreshSessionsButton");
 const deleteSessionButtonEl = document.querySelector("#deleteSessionButton");
 const sessionListEl = document.querySelector("#sessionList");
+const toastViewportEl = document.querySelector("#toastViewport");
 
-let sessionId = localStorage.getItem(SESSION_KEY);//读取浏览器存储的对话ID
+let sessionId = localStorage.getItem(SESSION_KEY);
 let localMessages = [];
+let sessionListSnapshot = "";
+let pendingDeleteSessionId = null;
+let pendingDeleteTimer = null;
+let streamAssistantContentEl = null;
+let pendingAssistantContent = "";
+let pendingAssistantFrame = null;
 
-//刷新/初始化操作：
-renderSessionId();//显示当前 session_id
-renderMessages();//初始化历史聊天记录
-checkHealth();//检查后端 API 是否能连接
+renderSessionId();
+renderMessages();
+checkHealth();
 loadSavedSession();
-loadSessionList();//加载对话列表
-
-
-function nextFrame() {//保证将动画渲染完再进行下一帧，防止吞动画
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => {
-      resolve();
-    });
-  });
-}
+loadSessionList({ silent: true });
 
 formEl.addEventListener("submit", async (event) => {
-  event.preventDefault();//组织浏览器默认提交行为，防止每次提交表单都自动刷新
+  event.preventDefault();
 
-  const text = inputEl.value.trim();//获取输入，去掉收尾空格
+  const text = inputEl.value.trim();
   if (!text) {
     return;
   }
 
   inputEl.value = "";
-  appendMessage("user", text);//将用户输入显示在页面上
+  appendMessage("user", text);
   appendMessage("thinking", "");
-  setLoading(true);//进入加载，防止用户重复提交
+  setLoading(true);
 
   await nextFrame();
 
   try {
-    await streamChatMessage(text);//开始流式请求
-
-  } catch {//无法连接后端
+    await streamChatMessage(text);
+  } catch {
     removeThinkingMessages();
     removeEmptyAssistantDraft();
-    appendMessage("error", "无法连接 API，请确认后端服务已启动。");
-  } finally {//无论请求成功还是失败,都恢复按钮和输入框,然后让输入框重新获得焦点
+    showError("无法连接 API，请确认后端服务已启动。");
+  } finally {
     setLoading(false);
     inputEl.focus();
   }
 });
 
 inputEl.addEventListener("keydown", (event) => {
-  if (event.key !== "Enter") {
-    return;
-  }
-
-  if (event.shiftKey) {
+  if (event.key !== "Enter" || event.shiftKey) {
     return;
   }
 
   event.preventDefault();
 
-  if (sendButtonEl.disabled) {
+  if (!sendButtonEl.disabled) {
+    formEl.requestSubmit();
+  }
+});
+
+newSessionButtonEl.addEventListener("click", async () => {
+  clearPendingDelete();
+  sessionId = null;
+  localMessages = [];
+  localStorage.removeItem(SESSION_KEY);
+  renderSessionId();
+  renderMessages();
+  renderSessionListFromCache();
+  await loadSessionList({ silent: true });
+  showToast("已创建新会话", "success");
+  inputEl.focus();
+});
+
+deleteSessionButtonEl.addEventListener("click", async () => {
+  if (!sessionId) {
+    showToast("当前没有可删除的会话。", "info");
     return;
   }
 
-  formEl.requestSubmit();
-});
+  if (pendingDeleteSessionId !== sessionId) {
+    pendingDeleteSessionId = sessionId;
+    deleteSessionButtonEl.textContent = "再次点击删除";
+    showToast("再次点击删除当前会话。", "info");
 
-//将消息发送给后端
-async function sendChatMessage(message) {
-  const payload = {
-    message,
-  };
-
-  if (sessionId) {
-    payload.session_id = sessionId;
+    window.clearTimeout(pendingDeleteTimer);
+    pendingDeleteTimer = window.setTimeout(clearPendingDelete, DELETE_CONFIRM_MS);
+    return;
   }
 
-  const response = await fetchWithRetry(`${API_BASE_URL}/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  return response.json();
-}
+  await deleteCurrentSession();
+});
 
 async function checkHealth() {
   try {
@@ -118,13 +115,15 @@ async function checkHealth() {
 
     apiStatusEl.textContent = "异常";
     apiStatusEl.dataset.state = "error";
+    showError(body.error, "API 状态异常。");
   } catch {
     apiStatusEl.textContent = "未连接";
     apiStatusEl.dataset.state = "error";
+    showError("无法连接 API，请确认后端服务已启动。");
   }
 }
 
-async function loadSavedSession() {//自动加载历史对话
+async function loadSavedSession() {
   if (!sessionId) {
     return;
   }
@@ -141,185 +140,76 @@ async function loadSavedSession() {//自动加载历史对话
       localMessages = [];
       renderSessionId();
       renderMessages();
+      renderSessionListFromCache();
+      showError(body.error, "加载历史失败。");
       return;
     }
 
     localMessages = body.data.history.filter((item) => item.role !== "system");
     renderMessages();
     renderSessionId();
+    renderSessionListFromCache();
   } catch {
-    appendMessage("error", "无法加载历史会话，请确认后端服务已启动。");
+    showError("加载历史失败，请确认后端服务已启动。");
   }
 }
 
-function appendMessage(role, content) {
-  localMessages.push({ role, content });
-  renderMessages();
-}
+async function loadSessionList(options = {}) {
+  const { silent = false } = options;
 
-async function renderHistoryWithStreamingReply(history) {//逐字渲染
-  const visibleHistory = history.filter((item) => item.role !== "system");//利用filter从消息里筛出系统消息外的消息
-
-  if (visibleHistory.length === 0) {
-    localMessages = [];
-    renderMessages();
-    return;
-  }
-
-  const lastMessage = visibleHistory[visibleHistory.length - 1];
-
-  if (lastMessage.role !== "assistant") {
-    localMessages = visibleHistory;
-    renderMessages();
-    return;
-  }
-
-  const fullReply = lastMessage.content;
-  const messagesBeforeReply = visibleHistory.slice(0, -1);
-
-  localMessages = [
-    ...messagesBeforeReply,
-    {
-      role: "assistant",
-      content: "",
-    },
-  ];
-  renderMessages();
-
-  await typeAssistantReply(fullReply);
-}
-
-async function typeAssistantReply(fullReply) {
-  const lastIndex = localMessages.length - 1;
-
-  for (const char of fullReply) {
-    localMessages[lastIndex].content += char;
-    updateLastMessageContent(localMessages[lastIndex].content);
-    await sleep(8);
-  }
-}
-
-function updateLastMessageContent(content) {
-  const contentEls = messagesEl.querySelectorAll(".message-content");
-  const lastContentEl = contentEls[contentEls.length - 1];
-
-  if (!lastContentEl) {
-    renderMessages();
-    return;
-  }
-
-  lastContentEl.innerHTML = renderMarkdown(content);//markdown渲染
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}
-
-function removeThinkingMessages() {
-  localMessages = localMessages.filter((message) => message.role !== "thinking");
-  renderMessages();
-}
-
-function renderMessages() {//对话渲染
-  messagesEl.innerHTML = "";//清空原有消息
-
-  if (localMessages.length === 0) {
-    const emptyEl = document.createElement("div");
-    emptyEl.className = "empty-state";//没有消息时
-    emptyEl.textContent = "开始一段对话";//无对话消息时页面文字
-    messagesEl.appendChild(emptyEl);
-    return;
-  }
-
-  for (const message of localMessages) {//如果有消息，将local message循环创建为HTML元素
-    const itemEl = document.createElement("article");
-    itemEl.className = `message message-${message.role}`;
-
-    const roleEl = document.createElement("div");
-    roleEl.className = "message-role";
-    roleEl.textContent = getRoleLabel(message.role);
-
-    const contentEl = document.createElement("div");
-    contentEl.className = "message-content";
-
-    if (message.role === "thinking") {
-    contentEl.appendChild(createThinkingIndicator());
-    } else {
-    if (message.role === "assistant") {
-    contentEl.innerHTML = renderMarkdown(message.content);//对助手消息进行markdown渲染
-                                                          //用户消息不渲染，防止执行用户输入进行XSS注入
-    } else {
-    contentEl.textContent = message.content;
-    }
-    }
-
-    itemEl.appendChild(roleEl);
-    itemEl.appendChild(contentEl);
-    messagesEl.appendChild(itemEl);
-  }
-
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-}
-
-function createThinkingIndicator() {
-  const wrapperEl = document.createElement("div");
-  wrapperEl.className = "thinking-indicator";
-
-  const dotEl = document.createElement("span");
-  dotEl.className = "thinking-dot";
-
-  wrapperEl.appendChild(dotEl);
-  return wrapperEl;
-}
-
-function renderSessionId() {
-  sessionIdEl.textContent = sessionId || "未创建";
-}
-
-function setLoading(isLoading) {//加载状态
-  sendButtonEl.disabled = isLoading;
-  inputEl.disabled = isLoading;
-  sendButtonEl.textContent = isLoading ? "发送中" : "发送";
-}
-
-function getRoleLabel(role) {
-  if (role === "user") {
-    return "你";
-  }
-
-  if (role === "assistant") {
-    return "助手";
-  }
-
-  if (role === "thinking") {
-    return "助手";
-  }
-
-  return "错误";
-}
-
-//---------------------对话列表-----------------------
-async function loadSessionList() {
   try {
     const response = await fetchWithRetry(`${API_BASE_URL}/sessions`);
     const body = await response.json();
 
     if (!response.ok || !body.ok) {
-      showError(body.error?.message || "加载会话列表失败。");
+      if (!silent) {
+        showError(body.error, "加载会话列表失败。");
+      }
       return;
     }
 
-    renderSessionList(body.data.sessions);
+    updateSessionList(body.data.sessions);
+
+    if (!silent) {
+      showToast("会话列表已刷新", "success");
+    }
   } catch {
-    showError("无法加载会话列表，请确认后端服务已启动。");
+    if (!silent) {
+      showError("加载会话列表失败，请确认后端服务已启动。");
+    }
+  }
+}
+
+function updateSessionList(sessions) {
+  const snapshot = JSON.stringify({
+    active: sessionId,
+    sessions,
+  });
+
+  if (snapshot === sessionListSnapshot) {
+    return;
+  }
+
+  sessionListSnapshot = snapshot;
+  renderSessionList(sessions);
+}
+
+function renderSessionListFromCache() {
+  if (!sessionListSnapshot) {
+    return;
+  }
+
+  try {
+    const cached = JSON.parse(sessionListSnapshot);
+    sessionListSnapshot = "";
+    updateSessionList(cached.sessions || []);
+  } catch {
+    sessionListSnapshot = "";
   }
 }
 
 function renderSessionList(sessions) {
-  sessionListEl.innerHTML = "";
+  sessionListEl.replaceChildren();
 
   if (sessions.length === 0) {
     const emptyEl = document.createElement("div");
@@ -338,101 +228,66 @@ function renderSessionList(sessions) {
       buttonEl.classList.add("session-item-active");
     }
 
-    buttonEl.innerHTML = `
-      <span class="session-item-title"></span>
-      <span class="session-item-meta">${item.message_count} 条消息</span>
-    `;
+    const titleEl = document.createElement("span");
+    titleEl.className = "session-item-title";
+    titleEl.textContent = getSessionTitle(item);
 
-    buttonEl.querySelector(".session-item-title").textContent = item.title;
+    const previewEl = document.createElement("span");
+    previewEl.className = "session-item-preview";
+    previewEl.textContent = getSessionPreview(item);
+
+    const metaEl = document.createElement("span");
+    metaEl.className = "session-item-meta";
+    metaEl.textContent = `${item.message_count} 条消息`;
+
+    buttonEl.appendChild(titleEl);
+    buttonEl.appendChild(previewEl);
+    buttonEl.appendChild(metaEl);
 
     buttonEl.addEventListener("click", async () => {
+      if (item.session_id === sessionId) {
+        return;
+      }
+
+      clearPendingDelete();
       sessionId = item.session_id;
       localStorage.setItem(SESSION_KEY, sessionId);
       renderSessionId();
+      renderSessionListFromCache();
       await loadSavedSession();
-      await loadSessionList();
+      await loadSessionList({ silent: true });
     });
 
     sessionListEl.appendChild(buttonEl);
   }
 }
 
-//-----------------------删除对话---------------------
-deleteSessionButtonEl.addEventListener("click", async () => {
-  if (!sessionId) {
-    showError("当前没有可删除的会话。");
-    return;
-  }
-
-  const shouldDelete = window.confirm("确定删除当前会话吗？");
-  if (!shouldDelete) {
-    return;
-  }
-
+async function deleteCurrentSession() {
   try {
+    const deletedSessionId = sessionId;
     const response = await fetchWithRetry(
-      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}`,
+      `${API_BASE_URL}/sessions/${encodeURIComponent(deletedSessionId)}`,
       { method: "DELETE" },
     );
     const body = await response.json();
 
     if (!response.ok || !body.ok) {
-      showError(body.error?.message || "删除会话失败。");
+      showError(body.error, "删除失败。");
       return;
     }
 
+    clearPendingDelete();
     sessionId = null;
     localMessages = [];
     localStorage.removeItem(SESSION_KEY);
     renderSessionId();
     renderMessages();
-    await loadSessionList();
+    await loadSessionList({ silent: true });
+    showToast("会话已删除", "success");
   } catch {
-    showError("无法删除会话，请确认后端服务已启动。");
-  }
-});
-
-
-refreshSessionsButtonEl.addEventListener("click", () => {
-  loadSessionList();
-});
-
-//新对话按钮也加入刷新
-newSessionButtonEl.addEventListener("click", () => {
-  sessionId = null;
-  localMessages = [];
-  localStorage.removeItem(SESSION_KEY);
-  renderMessages();
-  renderSessionId();
-  loadSessionList();
-  inputEl.focus();
-});
-
-//api重试的fetch
-async function fetchWithRetry(url, options = {}, retries = 1) {
-  try {
-    return await fetch(url, options);
-  } catch (error) {
-    if (retries <= 0) {
-      throw error;
-    }
-
-    await sleep(300);
-    return fetchWithRetry(url, options, retries - 1);//递归重试
+    showError("删除失败，请确认后端服务已启动。");
   }
 }
-
-function renderMarkdown(text) {//markdown渲染
-  const html = marked.parse(text || "");
-  return DOMPurify.sanitize(html);
-}
-
-//错误提示函数
-function showError(message) {
-  appendMessage("error", message);
-}
-
-//-------------------处理sse流式输出------------------
 
 async function streamChatMessage(message) {
   const payload = { message };
@@ -506,6 +361,7 @@ function handleSseMessage(rawMessage) {
     sessionId = data.session_id;
     localStorage.setItem(SESSION_KEY, sessionId);
     renderSessionId();
+    renderSessionListFromCache();
     return;
   }
 
@@ -524,14 +380,14 @@ function handleSseMessage(rawMessage) {
       renderMessages();
     }
 
-    loadSessionList();
+    loadSessionList({ silent: true });
     return;
   }
 
   if (event === "error") {
     removeThinkingMessages();
     removeEmptyAssistantDraft();
-    appendMessage("error", data.message || "请求失败。");
+    showError(data, "SSE 请求失败。");
   }
 }
 
@@ -540,7 +396,7 @@ function appendAssistantChunk(content) {
     return;
   }
 
-  removeThinkingMessages();
+  removeThinkingMessages({ render: false });
 
   let lastMessage = localMessages[localMessages.length - 1];
 
@@ -550,13 +406,126 @@ function appendAssistantChunk(content) {
       content: "",
     };
     localMessages.push(lastMessage);
-    renderMessages();
+    streamAssistantContentEl = appendMessageElement(lastMessage);
   }
 
   lastMessage.content += content;
   updateLastMessageContent(lastMessage.content);
 }
 
+function appendMessage(role, content) {
+  localMessages.push({ role, content });
+  renderMessages();
+}
+
+function renderMessages() {
+  streamAssistantContentEl = null;
+  cancelPendingAssistantRender();
+  messagesEl.replaceChildren();
+
+  if (localMessages.length === 0) {
+    const emptyEl = document.createElement("div");
+    emptyEl.className = "empty-state";
+    emptyEl.textContent = "开始一段对话";
+    messagesEl.appendChild(emptyEl);
+    return;
+  }
+
+  for (const message of localMessages) {
+    appendMessageElement(message);
+  }
+
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function appendMessageElement(message) {
+  const itemEl = document.createElement("article");
+  itemEl.className = `message message-${message.role}`;
+
+  const roleEl = document.createElement("div");
+  roleEl.className = "message-role";
+  roleEl.textContent = getRoleLabel(message.role);
+
+  const contentEl = document.createElement("div");
+  contentEl.className = "message-content";
+
+  if (message.role === "thinking") {
+    contentEl.appendChild(createThinkingIndicator());
+  } else if (message.role === "assistant") {
+    contentEl.innerHTML = renderMarkdown(message.content);
+  } else {
+    contentEl.textContent = message.content;
+  }
+
+  itemEl.appendChild(roleEl);
+  itemEl.appendChild(contentEl);
+  messagesEl.appendChild(itemEl);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+
+  if (message.role === "assistant") {
+    streamAssistantContentEl = contentEl;
+  }
+
+  return contentEl;
+}
+
+function updateLastMessageContent(content) {
+  if (!streamAssistantContentEl || !streamAssistantContentEl.isConnected) {
+    const assistantEls = messagesEl.querySelectorAll(
+      ".message-assistant .message-content",
+    );
+    streamAssistantContentEl = assistantEls[assistantEls.length - 1] || null;
+  }
+
+  if (!streamAssistantContentEl) {
+    renderMessages();
+    return;
+  }
+
+  pendingAssistantContent = content;
+
+  if (pendingAssistantFrame) {
+    return;
+  }
+
+  pendingAssistantFrame = requestAnimationFrame(() => {
+    pendingAssistantFrame = null;
+
+    if (!streamAssistantContentEl || !streamAssistantContentEl.isConnected) {
+      return;
+    }
+
+    streamAssistantContentEl.innerHTML = renderMarkdown(pendingAssistantContent);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  });
+}
+
+function createThinkingIndicator() {
+  const wrapperEl = document.createElement("div");
+  wrapperEl.className = "thinking-indicator";
+
+  for (let index = 0; index < 3; index += 1) {
+    const dotEl = document.createElement("span");
+    dotEl.className = "thinking-dot";
+    wrapperEl.appendChild(dotEl);
+  }
+
+  return wrapperEl;
+}
+
+function removeThinkingMessages(options = {}) {
+  const { render = true } = options;
+  localMessages = localMessages.filter((message) => message.role !== "thinking");
+
+  if (render) {
+    renderMessages();
+    return;
+  }
+
+  for (const itemEl of messagesEl.querySelectorAll(".message-thinking")) {
+    itemEl.remove();
+  }
+}
 
 function removeEmptyAssistantDraft() {
   const lastMessage = localMessages[localMessages.length - 1];
@@ -569,4 +538,126 @@ function removeEmptyAssistantDraft() {
     localMessages.pop();
     renderMessages();
   }
+}
+
+function renderSessionId() {
+  document.documentElement.dataset.sessionState = sessionId ? "active" : "empty";
+}
+
+function setLoading(isLoading) {
+  sendButtonEl.disabled = isLoading;
+  inputEl.disabled = isLoading;
+  sendButtonEl.textContent = isLoading ? "发送中" : "发送";
+}
+
+function getRoleLabel(role) {
+  if (role === "user") {
+    return "你";
+  }
+
+  if (role === "assistant" || role === "thinking") {
+    return "助手";
+  }
+
+  return "错误";
+}
+
+async function fetchWithRetry(url, options = {}, retries = 1) {
+  try {
+    return await fetch(url, options);
+  } catch (error) {
+    if (retries <= 0) {
+      throw error;
+    }
+
+    await sleep(300);
+    return fetchWithRetry(url, options, retries - 1);
+  }
+}
+
+function showError(errorOrMessage, fallbackMessage = "请求失败。") {
+  showToast(formatErrorMessage(errorOrMessage, fallbackMessage), "error");
+}
+
+function formatErrorMessage(errorOrMessage, fallbackMessage) {
+  if (typeof errorOrMessage === "string") {
+    return `请求失败：${errorOrMessage}`;
+  }
+
+  const message = errorOrMessage?.message || fallbackMessage;
+  const requestId = errorOrMessage?.request_id;
+
+  if (requestId) {
+    return `请求失败：${message}（request_id: ${requestId}）`;
+  }
+
+  return `请求失败：${message}`;
+}
+
+function showToast(message, type = "info") {
+  const toastEl = document.createElement("div");
+  toastEl.className = `toast toast-${type}`;
+  toastEl.setAttribute("role", "status");
+
+  const markerEl = document.createElement("span");
+  markerEl.className = "toast-marker";
+
+  const textEl = document.createElement("span");
+  textEl.className = "toast-message";
+  textEl.textContent = message;
+
+  toastEl.appendChild(markerEl);
+  toastEl.appendChild(textEl);
+  toastViewportEl.appendChild(toastEl);
+
+  window.setTimeout(() => {
+    toastEl.classList.add("toast-leaving");
+  }, 3200);
+
+  window.setTimeout(() => {
+    toastEl.remove();
+  }, 3800);
+}
+
+function clearPendingDelete() {
+  pendingDeleteSessionId = null;
+  window.clearTimeout(pendingDeleteTimer);
+  deleteSessionButtonEl.textContent = "删除当前会话";
+}
+
+function getSessionTitle(item) {
+  const title = String(item.title || "").trim();
+  return title || "新会话";
+}
+
+function getSessionPreview(item) {
+  return item.session_id || "未创建";
+}
+
+function cancelPendingAssistantRender() {
+  if (!pendingAssistantFrame) {
+    return;
+  }
+
+  cancelAnimationFrame(pendingAssistantFrame);
+  pendingAssistantFrame = null;
+}
+
+function nextFrame() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      resolve();
+    });
+  });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function renderMarkdown(text) {
+  const html = marked.parse(text || "");
+  return DOMPurify.sanitize(html);
 }

@@ -4,6 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4f8ff" />
     <title>agent1</title>
   </head>
   <body>
@@ -18,20 +19,12 @@
           新会话
         </button>
 
-        <div class="session-panel">
-          <div class="panel-label">Session</div>
-          <div id="sessionId" class="session-id">未创建</div>
-        </div>
-
         <div class="status-panel">
           <div class="panel-label">API</div>
           <div id="apiStatus" class="api-status">未连接</div>
         </div>
 
         <div class="session-actions">
-          <button id="refreshSessionsButton" class="secondary-button" type="button">
-            刷新列表
-          </button>
           <button id="deleteSessionButton" class="danger-button" type="button">
             删除当前会话
           </button>
@@ -64,10 +57,12 @@
             <div class="shortcut-hint">Enter 发送，Shift + Enter 换行</div>
           </div>
 
-          <button id="sendButton" type="submit">发送</button>
+          <button id="sendButton" type="submit" aria-label="发送消息">发送</button>
         </form>
       </main>
     </div>
+
+    <div id="toastViewport" class="toast-viewport" aria-live="polite"></div>
 
     <script type="module" src="/src/main.js"></script>
   </body>
