@@ -1,5 +1,6 @@
 """测试大模型对话与回复"""
 import agent
+from service.tool_router import ToolResult
 
 
 def test_create_history_contains_system_prompt():
@@ -38,7 +39,11 @@ def test_run_agent_uses_planned_tool(monkeypatch):
     """大模型决策工具调用测试"""
 
     monkeypatch.setattr(agent, "search_knowledge", lambda text: "没有找到相关知识。")
-    monkeypatch.setattr(agent, "run_planned_tool", lambda text: "规划工具回复")
+    monkeypatch.setattr(
+    agent,
+    "run_planned_tool",
+    lambda text: ToolResult(content="规划工具回复"),
+)
     messages = agent.create_history()
     agent.add_user_message(messages, "帮我找一下 FastAPI")
 

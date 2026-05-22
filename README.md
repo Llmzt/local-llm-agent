@@ -1,91 +1,80 @@
-````markdown
 # chat_agent
 
 一个用于学习 Agent 工程化的极简中文智能助手。
 
-- 工具路由
-- LLM 工具决策
-- SQLite 数据层
-- session/history 持久化
-- SSE 流式输出
-- Web 前端
-- 日志系统
-- 异常处理
-- 自动化测试
-
----
-
-# 项目特性
-
-## Agent 能力
+## 项目特性
 
 - 规则工具路由
-- LLM Planner 工具决策
-- 本地知识库查询与写入
-- 隐式知识库兜底检索
-- OpenAI-compatible 模型调用
+- LLM 工具决策规划
+- ToolSpec 2.0 结构化工具系统
+- SQLite 知识库查询与写入
+- session/history 持久化
+- SSE 真流式输出
+- FastAPI Web API
+- Vite 原生前端
+- 统一异常处理
+- 自动化测试
 
 核心流程：
 
 ```text
 用户输入
-    ↓
-规则工具路由
-    ↓
-LLM 工具规划
-    ↓
-知识库兜底
-    ↓
-普通 LLM 回复
-````
+  -> 规则工具路由
+  -> LLM 工具规划
+  -> 知识库兜底
+  -> 普通 LLM 回复
+```
 
----
+## 工具系统
 
-## 工程化能力
+工具通过 `ToolSpec` 注册，支持结构化参数、统一结果和副作用保护。
 
-* FastAPI Web API
-* SSE 真流式输出
-* SQLite 持久化
-* 多轮 session/history
-* 统一异常处理
-* 日志系统
-* 自动化测试
-* 前后端分离
+当前工具：
 
----
+- `time`：返回当前本地时间。
+- `knowledge_search`：查询本地 SQLite 知识库。
+- `knowledge_write`：写入本地知识库。
 
-## 前端功能
+工具调用结果统一为 `ToolResult`：
 
-* Web 聊天界面
-* Markdown 消息渲染
-* SSE 流式回复
-* “思考中” 动画
-* 历史会话列表
-* 删除会话
-* 页面刷新自动恢复历史
+```python
+ToolResult(
+    content="展示给用户的文本",
+    metadata={"tool": "tool_name"},
+)
+```
 
----
+LLM planner 输出结构化 JSON：
 
-# 技术栈
+```json
+{
+  "tool": "knowledge_search",
+  "arguments": {
+    "query": "FastAPI"
+  }
+}
+```
 
-## 后端
+带副作用的工具，例如 `knowledge_write`，默认不允许由 planner 自动调用，只允许通过明确规则命中触发，避免误写入本地数据。
 
-* Python
-* FastAPI
-* SQLite
-* OpenAI-compatible API
-* pytest
+## 技术栈
 
-## 前端
+后端：
 
-* Vite
-* Vanilla JavaScript
-* DOMPurify
-* marked
+- Python
+- FastAPI
+- SQLite
+- OpenAI-compatible API
+- pytest
 
----
+前端：
 
-# 项目结构
+- Vite
+- Vanilla JavaScript
+- marked
+- DOMPurify
+
+## 项目结构
 
 ```text
 .
@@ -102,6 +91,7 @@ LLM 工具规划
 │   ├── logger.py             # 日志系统
 │   ├── session_store.py      # session/history 持久化
 │   ├── sqlite_store.py       # SQLite 基础层
+│   ├── tool_adapters.py      # 结构化工具适配器
 │   ├── tool_planner.py       # LLM 工具规划
 │   └── tool_router.py        # 工具注册与路由
 ├── skill/
@@ -116,40 +106,41 @@ LLM 工具规划
 └── .env.example
 ```
 
-运行后自动生成：
+运行后会自动生成：
 
 ```text
 database/
 logs/
 ```
 
----
+## 快速开始
 
-# 快速开始
-
-## 1. 创建虚拟环境
+创建虚拟环境：
 
 ```bash
 python -m venv venv
 ```
 
----
-
-## 2. 安装依赖
+安装后端依赖：
 
 ```bash
 venv/bin/pip install -r requirements.txt
 ```
 
-如需运行测试：
+安装测试依赖：
 
 ```bash
 venv/bin/pip install -r requirements-dev.txt
 ```
 
----
+安装前端依赖：
 
-## 3. 配置环境变量
+```bash
+cd frontend
+npm install
+```
+
+## 配置
 
 复制配置文件：
 
@@ -175,11 +166,13 @@ LOG_LEVEL="INFO"
 LOG_FILE="./logs/agent.log"
 ```
 
----
+说明：
 
-# 运行方式
+- `MODEL` 用于普通回答。
+- `PLANNER_MODEL` 用于工具决策规划。
+- 模型接口使用 OpenAI-compatible Chat Completions API。
 
-# CLI
+## 运行 CLI
 
 ```bash
 venv/bin/python cli.py
@@ -193,27 +186,19 @@ quit
 q
 ```
 
----
-
-# 启动 API
+## 运行 API
 
 ```bash
 venv/bin/uvicorn service.api:app --host 127.0.0.1 --port 8000
 ```
 
----
-
-# API 示例
-
-## 健康检查
+健康检查：
 
 ```bash
 curl http://127.0.0.1:8000/health
 ```
 
----
-
-## 普通聊天
+普通聊天：
 
 ```bash
 curl -X POST http://127.0.0.1:8000/chat \
@@ -221,9 +206,7 @@ curl -X POST http://127.0.0.1:8000/chat \
   -d '{"message":"现在几点？"}'
 ```
 
----
-
-## SSE 流式聊天
+SSE 流式聊天：
 
 ```bash
 curl -N -X POST http://127.0.0.1:8000/chat/stream \
@@ -232,13 +215,9 @@ curl -N -X POST http://127.0.0.1:8000/chat/stream \
   -d '{"message":"讲一个短故事"}'
 ```
 
----
+## Session 管理
 
-# Session 持久化
-
-API 会自动返回 `session_id`。
-
-后续请求带上同一个 `session_id` 即可恢复历史上下文：
+API 会自动返回 `session_id`。后续请求带上同一个 `session_id` 即可恢复历史上下文：
 
 ```bash
 curl -X POST http://127.0.0.1:8000/chat \
@@ -246,38 +225,27 @@ curl -X POST http://127.0.0.1:8000/chat \
   -d '{"message":"继续","session_id":"你的session_id"}'
 ```
 
----
-
-# 会话管理
-
-## 获取历史会话
+获取历史会话：
 
 ```bash
 curl http://127.0.0.1:8000/sessions/{session_id}
 ```
 
----
-
-## 列出最近会话
+列出最近会话：
 
 ```bash
 curl http://127.0.0.1:8000/sessions
 ```
 
----
-
-## 删除会话
+删除会话：
 
 ```bash
-curl -X DELETE \
-http://127.0.0.1:8000/sessions/{session_id}
+curl -X DELETE http://127.0.0.1:8000/sessions/{session_id}
 ```
 
----
+## 运行前端
 
-# 前端运行
-
-先启动后端：
+先启动后端 API：
 
 ```bash
 venv/bin/uvicorn service.api:app --host 127.0.0.1 --port 8000
@@ -287,7 +255,6 @@ venv/bin/uvicorn service.api:app --host 127.0.0.1 --port 8000
 
 ```bash
 cd frontend
-npm install
 npm run dev
 ```
 
@@ -297,20 +264,26 @@ npm run dev
 http://127.0.0.1:5173
 ```
 
----
+前端支持：
 
-# 知识库
+- SSE 流式回复
+- Markdown 消息渲染
+- 思考动画
+- 历史会话列表
+- 切换和删除会话
+- 页面刷新后自动恢复历史
+- Enter 发送，Shift + Enter 换行
 
-## 查询知识
+## 知识库
+
+查询知识：
 
 ```text
 查询知识库 Python
 搜索 FastAPI
 ```
 
----
-
-## 写入知识
+写入知识：
 
 ```text
 添加知识：标题 | 内容 | 关键词
@@ -322,9 +295,7 @@ http://127.0.0.1:5173
 添加知识：FastAPI | FastAPI 是一个 Python Web API 框架。 | Python,API
 ```
 
----
-
-# 数据存储
+## 数据存储
 
 知识库：
 
@@ -338,9 +309,7 @@ database/knowledge.db
 database/sessions.db
 ```
 
----
-
-# 测试
+## 测试
 
 运行全部测试：
 
@@ -350,55 +319,21 @@ venv/bin/python -m pytest -q
 
 当前覆盖：
 
-* `.env` 解析
-* 工具路由
-* LLM Planner
-* SQLite 数据层
-* session/history
-* FastAPI API
-* SSE 流式接口
-* Agent 主流程
+- `.env` 解析
+- 工具路由
+- ToolSpec 结构化工具系统
+- LLM Planner
+- SQLite 数据层
+- session/history
+- FastAPI API
+- SSE 流式接口
+- Agent 主流程
 
 测试使用临时数据库，不会污染真实数据。
 
----
+## 本地运行产物
 
-# 当前项目状态
-
-当前项目已经完成：
-
-* Agent 主流程
-* Tool Router
-* Tool Planner
-* SQLite 数据层
-* Session 持久化
-* SSE 流式输出
-* Web 前端
-* 日志系统
-* 统一异常处理
-* 自动化测试
-
-
----
-
-# 后续规划
-
-计划继续加入：
-
-* 更完整的 Tool Calling
-* RAG / 向量检索
-* 多工具协同
-* Prompt 模板系统
-* Tool Memory
-* 长上下文管理
-* 多 Agent
-* Docker 部署
-* 用户认证
-* 更完整的前端 UI
-
----
-
-# 本地运行产物
+以下内容不应提交：
 
 ```text
 .env
@@ -409,11 +344,18 @@ frontend/node_modules/
 frontend/dist/
 ```
 
----
+## 后续规划
 
-# License
+可继续优化：
+
+- Docker 部署
+- request_id / 请求耗时中间件
+- 数据库迁移机制
+- RAG / 向量检索
+- Prompt 模板系统
+- 用户认证与权限
+- 更完整的前端 UI
+
+## License
 
 MIT
-
-```
-```

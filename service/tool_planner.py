@@ -22,8 +22,8 @@ PLANNER_SYSTEM_PROMPT = """
 
 返回格式只能是以下两种之一：
 
-{"tool": "工具名", "input": "传给工具的输入"}
-{"tool": null, "input": null}
+{"tool": "工具名", "arguments": {"参数名": "参数值"}}
+{"tool": null, "arguments": null}
 
 规则：
 1. 只有当工具明显有帮助时才选择工具。
@@ -59,7 +59,7 @@ def plan_tool_with_llm(user_input:str,tools:list[ToolSpec]) ->ToolPlan:
         raw_reply = call_planner_llm(messages)
     except Exception as exc:
         logger.warning("tool planner llm call failed: %s",exc)
-        plan = ToolPlan(tool=None,input=None)
+        plan = ToolPlan(tool=None,arguments=None)
         _PLAN_CACHE[cache_key]=plan
         return plan                             #优雅降级/fallback
                                                 #不raise错误也就不会挂agent，保证继续运行
@@ -71,16 +71,20 @@ def build_planner_prompt(tools:list[ToolSpec])->str:
     """构造工具规划提示词"""
     tool_lines = []
     for tool in tools:
+
+        if tool.side_effect and not tool.planner_enabled:
+            continue
+
         tool_lines.append(
             f"- name: {tool.name}\n"
             f"  description: {tool.description}\n"
-            f"  input_schema: {tool.input_schema}"
+            f"  arguments_schema: {json.dumps(tool.arguments_schema,ensure_ascii=False)}"
         )
     return(
         PLANNER_SYSTEM_PROMPT + "\n\n可用工具：\n" + "\n".join(tool_lines)
     )
 
-def parse_tool_plan(raw_reply:str)->ToolPlan:
+def parse_tool_plan(raw_reply:str)->ToolPlan:  #raw:生的，raw_reply:未处理的大模型决策结果
     """解析LLM返回的工具规划json"""
     text = raw_reply.strip()
 
@@ -88,18 +92,18 @@ def parse_tool_plan(raw_reply:str)->ToolPlan:
         data = json.loads(text)
     except json.JSONDecodeError:
         logger.warning("tool planner returned invalid json: %s",raw_reply)
-        return ToolPlan(tool=None,input=None)
+        return ToolPlan(tool=None,arguments=None)
     
     tool = data.get("tool")
-    tool_input = data.get("input")
+    arguments = data.get("arguments")
 
-    if tool is not None and not isinstance(tool,str):#模型输出校验：大模型输出内容不完全可信，可能产生类型漂移
-        return ToolPlan(tool=None,input=None)
+    if tool is not None and not isinstance(tool,str):   #模型输出校验：大模型输出内容不完全可信，可能产生类型漂移
+        return ToolPlan(tool=None,arguments=None)
     
-    if tool_input is not None and not isinstance(tool_input,str):
-        return ToolPlan(tool=None,input=None)
+    if arguments is not None and not isinstance(arguments,dict):
+        return ToolPlan(tool=None,arguments=None)
     
-    return ToolPlan(tool=tool,input=tool_input)
+    return ToolPlan(tool=tool,arguments=arguments)
 
 
 def build_cache_key(user_input:str,tools:list[ToolSpec])->str:

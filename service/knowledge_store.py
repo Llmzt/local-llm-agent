@@ -40,7 +40,7 @@ class KnowledgeStore(SQLiteStore):
                     ORDER BY id
                     LIMIT ?
                     """,
-                    (f"%{query}%", f"%{query}%", f"%{query}%", limit),
+                    (f"%{query}%", f"%{query}%", f"%{query}%", limit),  #参数化查询，防止sql注入
                 ).fetchall()
         except sqlite3.Error as exc:
             raise KnowledgeError(
@@ -69,7 +69,7 @@ class KnowledgeStore(SQLiteStore):
                     INSERT INTO knowledge (title, content, keywords)
                     VALUES (?, ?, ?)
                     """,
-                    (title, content, keywords),
+                    (title, content, keywords),                     #参数化写入防止sql注入
                 )
                 item_id = int(cursor.lastrowid)
         except sqlite3.Error as exc:

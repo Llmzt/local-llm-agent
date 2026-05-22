@@ -1,8 +1,14 @@
 """Agent 主流程：决定走本地工具，还是交给普通 LLM。"""
 from service.llm import stream_llm_chunks,call_llm_with_model,get_config
-from skill.knowledge import search_knowledge
-from skill.time import get_current_time
-from skill.knowledge_write import add_knowledge
+from skill.knowledge import search_knowledge    #用于隐式知识库查询
+from service.tool_adapters import (
+    parse_empty_arguments,
+    parse_knowledge_search_arguments,
+    parse_knowledge_write_arguments,
+    run_knowledge_search_tool,
+    run_knowledge_write_tool,
+    run_time_tool,
+)
 from service.logger import get_logger
 from service.tool_router import (
     ToolSpec,
@@ -29,26 +35,73 @@ TOOLS = [
     ToolSpec(
         name="knowledge_write",
         description="把用户提供的标题、内容、关键词写入本地知识库。",
-        input_schema="标题 | 内容 | 关键词",
+        arguments_schema={
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "原始写入指令，例如：添加知识：标题 | 内容 | 关键词",
+                },
+                "title": {
+                    "type": "string",
+                    "description": "知识标题",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "知识正文",
+                },
+                "keywords": {
+                    "type": "string",
+                    "description": "关键词",
+                },
+            },
+        },
         match=lambda text: any(word in text for word in ADD_KNOWLEDGE_WORDS),
-        handler=add_knowledge,
+        parse_rule_input=parse_knowledge_write_arguments,
+        handler=run_knowledge_write_tool,
+        side_effect=True,
+        planner_enabled=False,
     ),
     ToolSpec(
         name="time",
         description="回答当前时间、日期、星期相关问题。",
-        input_schema="用户关于当前时间、日期、星期的问题",
+        arguments_schema={
+            "type": "object",
+            "properties": {},
+        },
         match=lambda text: any(word in text for word in TIME_WORDS),
-        handler=lambda text: get_current_time(),
+        parse_rule_input=parse_empty_arguments,
+        handler=run_time_tool,
+        side_effect=False,
+        planner_enabled=True,
     ),
     ToolSpec(
         name="knowledge_search",
         description="查询本地 SQLite 知识库，适合检索已有知识、资料、笔记。",
-        input_schema="要查询的关键词或问题",
+        arguments_schema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "要查询的关键词或问题",
+                },
+            },
+            "required": ["query"],
+        },
         match=lambda text: any(word in text for word in KNOWLEDGE_WORDS),
-        handler=search_knowledge,
+        parse_rule_input=parse_knowledge_search_arguments,
+        handler=run_knowledge_search_tool,
+        side_effect=False,
+        planner_enabled=True,
     ),
 ]
 
+def run_planned_tool(user_input: str):
+    """规则未命中时，让 LLM 判断是否需要工具。"""
+    plan = plan_tool_with_llm(user_input, TOOLS)
+    return execute_tool_plan(plan, TOOLS)
+
+#---------------------多轮对话管理------------------------
 def create_history() -> list[dict[str, str]]:
     """创建一段新对话。"""
     return [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -83,13 +136,15 @@ def run_agent(
     config = get_config()
     user_input = messages[-1]["content"]
 
-    tool_reply = route_tool_by_rule(user_input, TOOLS)#关键词匹配工具
-    if tool_reply is not None:
-        return reply_with_text(tool_reply, stream_print)
+    #关键词匹配   
+    tool_result = route_tool_by_rule(user_input, TOOLS)
+    if tool_result is not None:
+        return reply_with_text(tool_result.content, stream_print)
 
-    planned_reply = run_planned_tool(user_input)#大模型决策工具
-    if planned_reply is not None:
-        return reply_with_text(planned_reply, stream_print)
+    #大模型决策
+    planned_result = run_planned_tool(user_input)
+    if planned_result is not None:
+        return reply_with_text(planned_result.content, stream_print)
 
     knowledge_reply = search_knowledge(user_input)#隐式知识库检索
     if has_knowledge_result(knowledge_reply):
@@ -121,14 +176,14 @@ def run_agent_stream(messages: list[dict[str,str]])->Iterator[str]:
 
     user_input  = messages[-1]["content"]
 
-    tool_reply = route_tool_by_rule(user_input,TOOLS)
-    if tool_reply is not None:
-        yield tool_reply
+    tool_result = route_tool_by_rule(user_input, TOOLS)
+    if tool_result is not None:
+        yield tool_result.content
         return
-    
-    planned_reply = run_planned_tool(user_input)
-    if planned_reply is not None:
-        yield planned_reply
+
+    planned_result = run_planned_tool(user_input)
+    if planned_result is not None:
+        yield planned_result.content
         return
 
     knowledge_reply  = search_knowledge(user_input)
@@ -139,8 +194,3 @@ def run_agent_stream(messages: list[dict[str,str]])->Iterator[str]:
 
     logger.info("route to llm stream")
     yield from stream_llm_chunks(messages)#yield from
-
-def run_planned_tool(user_input: str) -> str | None:
-    """规则未命中时，让 LLM 判断是否需要工具。"""
-    plan = plan_tool_with_llm(user_input, TOOLS)
-    return execute_tool_plan(plan, TOOLS)

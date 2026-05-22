@@ -1,9 +1,9 @@
-"""测试工具路由"""
 import pytest
 
 from service.errors import ToolError
 from service.tool_router import (
     ToolPlan,
+    ToolResult,
     ToolSpec,
     execute_tool,
     execute_tool_plan,
@@ -12,18 +12,21 @@ from service.tool_router import (
 )
 
 
-def test_route_tool_by_rule_returns_handler_result_when_matched():
+def test_route_tool_by_rule_returns_tool_result_when_matched():
     tools = [
         ToolSpec(
             name="hello",
             description="测试工具",
-            input_schema="任意文本",
+            arguments_schema={"type": "object"},
             match=lambda text: "你好" in text,
-            handler=lambda text: "命中 hello",
+            parse_rule_input=lambda text: {"name": text},
+            handler=lambda args: ToolResult(content=f"命中 {args['name']}"),
         )
     ]
 
-    assert route_tool_by_rule("你好", tools) == "命中 hello"
+    result = route_tool_by_rule("你好", tools)
+
+    assert result == ToolResult(content="命中 你好")
 
 
 def test_route_tool_by_rule_returns_none_when_no_tool_matched():
@@ -31,9 +34,10 @@ def test_route_tool_by_rule_returns_none_when_no_tool_matched():
         ToolSpec(
             name="hello",
             description="测试工具",
-            input_schema="任意文本",
+            arguments_schema={"type": "object"},
             match=lambda text: "你好" in text,
-            handler=lambda text: "命中 hello",
+            parse_rule_input=lambda text: {"name": text},
+            handler=lambda args: ToolResult(content="命中 hello"),
         )
     ]
 
@@ -44,9 +48,10 @@ def test_find_tool():
     tool = ToolSpec(
         name="hello",
         description="测试工具",
-        input_schema="任意文本",
+        arguments_schema={"type": "object"},
         match=lambda text: False,
-        handler=lambda text: "ok",
+        parse_rule_input=lambda text: {},
+        handler=lambda args: ToolResult(content="ok"),
     )
 
     assert find_tool([tool], "hello") == tool
@@ -58,24 +63,47 @@ def test_execute_tool_plan_runs_known_tool():
         ToolSpec(
             name="hello",
             description="测试工具",
-            input_schema="任意文本",
+            arguments_schema={"type": "object"},
             match=lambda text: False,
-            handler=lambda text: f"hello {text}",
+            parse_rule_input=lambda text: {},
+            handler=lambda args: ToolResult(content=f"hello {args['name']}"),
         )
     ]
 
     result = execute_tool_plan(
-        ToolPlan(tool="hello", input="world"),
+        ToolPlan(tool="hello", arguments={"name": "world"}),
         tools,
     )
 
-    assert result == "hello world"
+    assert result == ToolResult(content="hello world")
 
 
 def test_execute_tool_plan_returns_none_for_unknown_tool():
     result = execute_tool_plan(
-        ToolPlan(tool="missing", input="world"),
+        ToolPlan(tool="missing", arguments={"name": "world"}),
         [],
+    )
+
+    assert result is None
+
+
+def test_execute_tool_plan_blocks_disabled_side_effect_tool():
+    tools = [
+        ToolSpec(
+            name="write",
+            description="写入工具",
+            arguments_schema={"type": "object"},
+            match=lambda text: False,
+            parse_rule_input=lambda text: {},
+            handler=lambda args: ToolResult(content="written"),
+            side_effect=True,
+            planner_enabled=False,
+        )
+    ]
+
+    result = execute_tool_plan(
+        ToolPlan(tool="write", arguments={}),
+        tools,
     )
 
     assert result is None
@@ -85,10 +113,11 @@ def test_execute_tool_wraps_unexpected_error():
     tool = ToolSpec(
         name="bad",
         description="坏工具",
-        input_schema="任意文本",
+        arguments_schema={"type": "object"},
         match=lambda text: True,
-        handler=lambda text: 1 / 0,
+        parse_rule_input=lambda text: {},
+        handler=lambda args: 1 / 0,
     )
 
     with pytest.raises(ToolError):
-        execute_tool(tool, "x")
+        execute_tool(tool, {})
