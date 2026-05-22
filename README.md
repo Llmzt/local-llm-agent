@@ -1,88 +1,157 @@
+````markdown
 # chat_agent
 
-一个用于学习 Agent 基础工程化的极简中文助手。
+一个用于学习 Agent 工程化的极简中文智能助手。
 
-项目支持：
-
-- 命令行多轮对话
-- FastAPI Web API
-- OpenAI-compatible 模型调用
-- 本地工具路由
-- LLM 工具决策规划
-- SQLite 知识库查询与写入
-- API session/history 持久化
-- 轻量 Web 前端
+- 工具路由
+- LLM 工具决策
+- SQLite 数据层
+- session/history 持久化
 - SSE 流式输出
-- 历史会话列表、会话删除、Markdown 消息渲染
-- pytest 自动化测试
+- Web 前端
+- 日志系统
+- 异常处理
+- 自动化测试
+
+---
+
+# 项目特性
+
+## Agent 能力
+
+- 规则工具路由
+- LLM Planner 工具决策
+- 本地知识库查询与写入
+- 隐式知识库兜底检索
+- OpenAI-compatible 模型调用
 
 核心流程：
 
 ```text
-用户输入 -> 规则工具路由 -> LLM 工具决策 -> 知识库兜底 / 普通 LLM -> 输出
-```
+用户输入
+    ↓
+规则工具路由
+    ↓
+LLM 工具规划
+    ↓
+知识库兜底
+    ↓
+普通 LLM 回复
+````
 
-## 目录结构
+---
+
+## 工程化能力
+
+* FastAPI Web API
+* SSE 真流式输出
+* SQLite 持久化
+* 多轮 session/history
+* 统一异常处理
+* 日志系统
+* 自动化测试
+* 前后端分离
+
+---
+
+## 前端功能
+
+* Web 聊天界面
+* Markdown 消息渲染
+* SSE 流式回复
+* “思考中” 动画
+* 历史会话列表
+* 删除会话
+* 页面刷新自动恢复历史
+
+---
+
+# 技术栈
+
+## 后端
+
+* Python
+* FastAPI
+* SQLite
+* OpenAI-compatible API
+* pytest
+
+## 前端
+
+* Vite
+* Vanilla JavaScript
+* DOMPurify
+* marked
+
+---
+
+# 项目结构
 
 ```text
 .
-├── agent.py                  # Agent 主流程：工具路由、知识库兜底、LLM 调用
-├── cli.py                    # 命令行入口
+├── agent.py                  # Agent 主流程
+├── cli.py                    # CLI 入口
 ├── service/
-│   ├── api.py                # FastAPI 服务入口
-│   ├── config.py             # 模型配置读取
-│   ├── env.py                # .env 文件加载
-│   ├── errors.py             # 统一异常类型
-│   ├── knowledge_store.py    # SQLite 知识库数据层
-│   ├── llm.py                # OpenAI-compatible 模型调用
-│   ├── logger.py             # 日志初始化
+│   ├── api.py                # FastAPI API
+│   ├── config.py             # 配置读取
+│   ├── env.py                # .env 加载
+│   ├── errors.py             # 统一异常
+│   ├── error_response.py     # API 错误响应
+│   ├── knowledge_store.py    # SQLite 知识库
+│   ├── llm.py                # LLM 调用封装
+│   ├── logger.py             # 日志系统
 │   ├── session_store.py      # session/history 持久化
-│   ├── tool_planner.py       # LLM 工具决策规划
-│   └── tool_router.py        # 本地工具注册和匹配
+│   ├── sqlite_store.py       # SQLite 基础层
+│   ├── tool_planner.py       # LLM 工具规划
+│   └── tool_router.py        # 工具注册与路由
 ├── skill/
-│   ├── knowledge.py          # 知识库查询工具
-│   ├── knowledge_write.py    # 知识库写入工具
-│   └── time.py               # 当前时间工具
-├── frontend/                 # Vite 原生前端
+│   ├── knowledge.py          # 知识库查询
+│   ├── knowledge_write.py    # 知识库写入
+│   └── time.py               # 时间工具
+├── frontend/                 # 前端
 ├── tests/                    # pytest 测试
-├── requirements.txt          # 运行依赖
-├── requirements-dev.txt      # 测试依赖
-├── pytest.ini                # pytest 配置
-└── .env.example              # 环境变量示例
+├── requirements.txt
+├── requirements-dev.txt
+├── pytest.ini
+└── .env.example
 ```
 
-运行时会自动创建本地数据和日志目录：
+运行后自动生成：
 
 ```text
 database/
 logs/
 ```
 
-## 安装
+---
 
-创建虚拟环境并安装运行依赖：
+# 快速开始
+
+## 1. 创建虚拟环境
 
 ```bash
 python -m venv venv
+```
+
+---
+
+## 2. 安装依赖
+
+```bash
 venv/bin/pip install -r requirements.txt
 ```
 
-如需运行测试，再安装开发依赖：
+如需运行测试：
 
 ```bash
 venv/bin/pip install -r requirements-dev.txt
 ```
 
-如需运行前端：
+---
 
-```bash
-cd frontend
-npm install
-```
+## 3. 配置环境变量
 
-## 配置
-
-复制示例配置：
+复制配置文件：
 
 ```bash
 cp .env.example .env
@@ -94,7 +163,7 @@ cp .env.example .env
 API_KEY="你的模型 API Key"
 ```
 
-示例配置：
+示例：
 
 ```bash
 BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
@@ -106,26 +175,11 @@ LOG_LEVEL="INFO"
 LOG_FILE="./logs/agent.log"
 ```
 
-说明：
+---
 
-- 模型接口使用 OpenAI-compatible Chat Completions API。
-- `BASE_URL` 和 `MODEL` 可以按实际服务商调整。
-- `PLANNER_MODEL` 用于工具决策，建议使用更快、更便宜的模型。
+# 运行方式
 
-## Agent 路由
-
-Agent 当前按以下顺序处理用户输入：
-
-```text
-1. 规则工具路由：明确命中时间、知识库查询、知识库写入等工具。
-2. LLM 工具决策：规则未命中时，由 planner 模型返回 JSON 工具计划。
-3. 知识库兜底：隐式知识库检索。
-4. 普通 LLM：没有工具和知识库结果时，调用主模型回答。
-```
-
-工具决策使用独立的 `PLANNER_MODEL`，主回答使用 `MODEL`。planner 结果带有轻量缓存，缓存 key 会归一化用户输入中的全角/半角、大小写、空白和标点差异，例如“现在几点”和“现在几点？”会视为同一类决策输入。
-
-## 运行 CLI
+# CLI
 
 ```bash
 venv/bin/python cli.py
@@ -139,21 +193,27 @@ quit
 q
 ```
 
-## 运行 API
+---
 
-启动服务：
+# 启动 API
 
 ```bash
 venv/bin/uvicorn service.api:app --host 127.0.0.1 --port 8000
 ```
 
-健康检查：
+---
+
+# API 示例
+
+## 健康检查
 
 ```bash
 curl http://127.0.0.1:8000/health
 ```
 
-聊天请求：
+---
+
+## 普通聊天
 
 ```bash
 curl -X POST http://127.0.0.1:8000/chat \
@@ -161,7 +221,9 @@ curl -X POST http://127.0.0.1:8000/chat \
   -d '{"message":"现在几点？"}'
 ```
 
-SSE 流式聊天请求：
+---
+
+## SSE 流式聊天
 
 ```bash
 curl -N -X POST http://127.0.0.1:8000/chat/stream \
@@ -170,35 +232,52 @@ curl -N -X POST http://127.0.0.1:8000/chat/stream \
   -d '{"message":"讲一个短故事"}'
 ```
 
-API 会返回 `session_id`，后续请求带上同一个 `session_id` 即可继续同一段历史：
+---
+
+# Session 持久化
+
+API 会自动返回 `session_id`。
+
+后续请求带上同一个 `session_id` 即可恢复历史上下文：
 
 ```bash
 curl -X POST http://127.0.0.1:8000/chat \
   -H "Content-Type: application/json" \
-  -d '{"message":"今天日期？","session_id":"上一次返回的 session_id"}'
+  -d '{"message":"继续","session_id":"你的session_id"}'
 ```
 
-读取历史会话：
+---
+
+# 会话管理
+
+## 获取历史会话
 
 ```bash
-curl http://127.0.0.1:8000/sessions/上一次返回的_session_id
+curl http://127.0.0.1:8000/sessions/{session_id}
 ```
 
-列出最近会话：
+---
+
+## 列出最近会话
 
 ```bash
 curl http://127.0.0.1:8000/sessions
 ```
 
-删除会话：
+---
+
+## 删除会话
 
 ```bash
-curl -X DELETE http://127.0.0.1:8000/sessions/要删除的_session_id
+curl -X DELETE \
+http://127.0.0.1:8000/sessions/{session_id}
 ```
 
-## 运行前端
+---
 
-先启动后端 API：
+# 前端运行
+
+先启动后端：
 
 ```bash
 venv/bin/uvicorn service.api:app --host 127.0.0.1 --port 8000
@@ -208,28 +287,30 @@ venv/bin/uvicorn service.api:app --host 127.0.0.1 --port 8000
 
 ```bash
 cd frontend
+npm install
 npm run dev
 ```
 
-浏览器打开：
+浏览器访问：
 
 ```text
 http://127.0.0.1:5173
 ```
 
-前端会调用 `/chat/stream` 进行 SSE 真流式聊天，保存当前 `session_id`，刷新页面后自动加载历史消息。左侧会展示历史会话列表，支持切换会话、刷新列表和删除当前会话。
+---
 
+# 知识库
 
-## 知识库用法
-
-查询知识库：
+## 查询知识
 
 ```text
 查询知识库 Python
 搜索 FastAPI
 ```
 
-写入知识库：
+---
+
+## 写入知识
 
 ```text
 添加知识：标题 | 内容 | 关键词
@@ -238,22 +319,28 @@ http://127.0.0.1:5173
 示例：
 
 ```text
-添加知识：FastAPI | FastAPI 是一个用于构建 Python API 的 Web 框架。 | Python,API,Web
+添加知识：FastAPI | FastAPI 是一个 Python Web API 框架。 | Python,API
 ```
 
-知识库默认保存在：
+---
+
+# 数据存储
+
+知识库：
 
 ```text
 database/knowledge.db
 ```
 
-session/history 默认保存在：
+会话历史：
 
 ```text
 database/sessions.db
 ```
 
-## 测试
+---
+
+# 测试
 
 运行全部测试：
 
@@ -261,21 +348,57 @@ database/sessions.db
 venv/bin/python -m pytest -q
 ```
 
-当前测试覆盖：
+当前覆盖：
 
-- `.env` 单行解析
-- 知识库输入解析
-- SQLite 知识库读写
-- session/history 持久化
-- SQLite 连接、事务和外键约束
-- 工具路由
-- Agent 主流程
-- FastAPI 基础接口
-- SSE 流式聊天接口
+* `.env` 解析
+* 工具路由
+* LLM Planner
+* SQLite 数据层
+* session/history
+* FastAPI API
+* SSE 流式接口
+* Agent 主流程
 
-测试使用临时数据库，不会污染真实的 `database/*.db`。
+测试使用临时数据库，不会污染真实数据。
 
-## 本地运行产物
+---
+
+# 当前项目状态
+
+当前项目已经完成：
+
+* Agent 主流程
+* Tool Router
+* Tool Planner
+* SQLite 数据层
+* Session 持久化
+* SSE 流式输出
+* Web 前端
+* 日志系统
+* 统一异常处理
+* 自动化测试
+
+
+---
+
+# 后续规划
+
+计划继续加入：
+
+* 更完整的 Tool Calling
+* RAG / 向量检索
+* 多工具协同
+* Prompt 模板系统
+* Tool Memory
+* 长上下文管理
+* 多 Agent
+* Docker 部署
+* 用户认证
+* 更完整的前端 UI
+
+---
+
+# 本地运行产物
 
 ```text
 .env
@@ -284,4 +407,13 @@ logs/
 database/*.db
 frontend/node_modules/
 frontend/dist/
+```
+
+---
+
+# License
+
+MIT
+
+```
 ```
