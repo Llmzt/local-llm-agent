@@ -13,6 +13,7 @@ class AppConfig:
     model: str
     request_timeout: float
     max_retries: int
+    planner_model: str
 
 
 def load_config() -> AppConfig:
@@ -22,9 +23,11 @@ def load_config() -> AppConfig:
     api_key = os.getenv("API_KEY", "").strip()
     if not api_key:
         raise ConfigError("missing API_KEY environment variable",)
+    
 
     return AppConfig(
         api_key=api_key,
+        #getenv(a,b):获取参数a，如果参数未定义，默认为b
         base_url=os.getenv(
             "BASE_URL",
             "https://dashscope.aliyuncs.com/compatible-mode/v1",
@@ -32,6 +35,7 @@ def load_config() -> AppConfig:
         model=os.getenv("MODEL", "qvq-max-2025-03-25"),
         request_timeout=get_float("REQUEST_TIMEOUT", 30.0),
         max_retries=get_int("MAX_RETRIES", 2),
+        planner_model=os.getenv("PLANNER_MODEL", "qwen-turbo"),
     )
 
 

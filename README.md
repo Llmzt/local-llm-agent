@@ -1,6 +1,6 @@
 # chat_agent
 
-一个用于学习 Agent 基础工程化的极简中文助手项目。
+一个用于学习 Agent 基础工程化的极简中文助手。
 
 项目支持：
 
@@ -8,17 +8,18 @@
 - FastAPI Web API
 - OpenAI-compatible 模型调用
 - 本地工具路由
+- LLM 工具决策规划
 - SQLite 知识库查询与写入
 - API session/history 持久化
 - 轻量 Web 前端
-- SSE 真流式输出
+- SSE 流式输出
 - 历史会话列表、会话删除、Markdown 消息渲染
 - pytest 自动化测试
 
 核心流程：
 
 ```text
-用户输入 -> Agent 路由 -> 本地工具 / 知识库 / 普通 LLM -> 输出
+用户输入 -> 规则工具路由 -> LLM 工具决策 -> 知识库兜底 / 普通 LLM -> 输出
 ```
 
 ## 目录结构
@@ -36,6 +37,7 @@
 │   ├── llm.py                # OpenAI-compatible 模型调用
 │   ├── logger.py             # 日志初始化
 │   ├── session_store.py      # session/history 持久化
+│   ├── tool_planner.py       # LLM 工具决策规划
 │   └── tool_router.py        # 本地工具注册和匹配
 ├── skill/
 │   ├── knowledge.py          # 知识库查询工具
@@ -97,6 +99,7 @@ API_KEY="你的模型 API Key"
 ```bash
 BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
 MODEL="qvq-max-2025-03-25"
+PLANNER_MODEL="qwen-turbo"
 REQUEST_TIMEOUT="30"
 MAX_RETRIES="2"
 LOG_LEVEL="INFO"
@@ -107,6 +110,20 @@ LOG_FILE="./logs/agent.log"
 
 - 模型接口使用 OpenAI-compatible Chat Completions API。
 - `BASE_URL` 和 `MODEL` 可以按实际服务商调整。
+- `PLANNER_MODEL` 用于工具决策，建议使用更快、更便宜的模型。
+
+## Agent 路由
+
+Agent 当前按以下顺序处理用户输入：
+
+```text
+1. 规则工具路由：明确命中时间、知识库查询、知识库写入等工具。
+2. LLM 工具决策：规则未命中时，由 planner 模型返回 JSON 工具计划。
+3. 知识库兜底：隐式知识库检索。
+4. 普通 LLM：没有工具和知识库结果时，调用主模型回答。
+```
+
+工具决策使用独立的 `PLANNER_MODEL`，主回答使用 `MODEL`。planner 结果带有轻量缓存，缓存 key 会归一化用户输入中的全角/半角、大小写、空白和标点差异，例如“现在几点”和“现在几点？”会视为同一类决策输入。
 
 ## 运行 CLI
 
@@ -202,12 +219,6 @@ http://127.0.0.1:5173
 
 前端会调用 `/chat/stream` 进行 SSE 真流式聊天，保存当前 `session_id`，刷新页面后自动加载历史消息。左侧会展示历史会话列表，支持切换会话、刷新列表和删除当前会话。
 
-前端还支持：
-
-- Enter 发送，Shift + Enter 换行
-- 助手回复边生成边显示
-- 首个流式 chunk 到达前显示思考动画
-- 助手消息 Markdown 渲染
 
 ## 知识库用法
 

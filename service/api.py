@@ -207,6 +207,7 @@ async def handle_validation_error(request: Request,exc: RequestValidationError)-
 @app.exception_handler(HTTPException)
 async def handle_http_error(request: Request, exc: HTTPException,)->JSONResponse:
     """主动抛出的 HTTP 错误。"""
+    #通常为请求资源不存在等，为主动抛出，不需要记日志
     return build_error_response(status_code=exc.status_code, payload=http_error_payload(exc))
 
 @app.exception_handler(AppError)

@@ -10,6 +10,7 @@ from service.errors import LLMError
 
 logger = get_logger(__name__)
 
+#懒加载 + 单例缓存
 _client = None
 _config = None
 
@@ -39,24 +40,23 @@ def get_client():
     )
     return _client
 
-
-def call_llm(
+def call_llm_with_model(
     messages: list[dict[str, str]],
-    stream: bool = True,
+    model: str,
+    stream: bool = False,
     stream_print: bool = False,
 ) -> str:
-    """调用模型并返回完整文本。"""
-    config = get_config()
+    """使用指定模型调用聊天补全。"""
     request = {
-        "model": config.model,
-        "messages": messages,
-        "stream": stream,
+        "model":model,
+        "messages":messages,
+        "stream":stream,
+        "temperature":0,#随机性参数
     }
-
-    logger.info("calling llm: model=%s stream=%s", config.model, stream)
+    logger.info("call llm with model:%s,stream:%s",model,stream)
 
     if stream:
-        return call_llm_stream(request, stream_print)
+        return call_llm_stream(request,stream_print=stream_print)
     return call_llm_once(request)
 
 
@@ -149,3 +149,13 @@ def stream_llm_chunks(messages:list[dict[str,str]])->Iterator[str]:
 
     if not has_content:
         raise LLMError("llm returned empty content",user_message="模型返回内容为空。")
+    
+def call_planner_llm(messages: list[dict[str, str]]) -> str:
+    """调用工具规划模型。"""
+    config = get_config()
+    return call_llm_with_model(
+        messages=messages,
+        model=config.planner_model,
+        stream=False,
+        stream_print=False,
+    )
