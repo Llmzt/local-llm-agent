@@ -1,8 +1,8 @@
 """接口响应测试"""
 from fastapi.testclient import TestClient
 
-import service.api as api_module
-from service.session_store import SessionStore
+import service.api.api as api_module
+from service.stores.session_store import SessionStore
 
 
 def create_client(tmp_path, monkeypatch)->TestClient:
@@ -10,6 +10,16 @@ def create_client(tmp_path, monkeypatch)->TestClient:
     db_path = tmp_path / "session.db"
 
     monkeypatch.setattr(api_module,"get_session_store",lambda: SessionStore(db_path),)
+    monkeypatch.setattr(
+        api_module,
+        "run_agent",
+        lambda messages, stream=True, stream_print=False: "2026-05-22 13:16:40",
+    )
+    monkeypatch.setattr(
+        api_module,
+        "run_agent_stream",
+        lambda messages: iter(["2026-05-22 13:16:40"]),
+    )
 
     return TestClient(api_module.app)
 

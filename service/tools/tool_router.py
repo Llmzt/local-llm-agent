@@ -4,12 +4,21 @@ from collections.abc import Callable
 from dataclasses import dataclass,field
 from typing import Any
 
-from service.logger import get_logger
-from service.errors import ToolError
+from service.core.logger import get_logger
+from service.core.errors import ToolError
 
 logger = get_logger(__name__)
 
 #---------------------------结构规范-----------------------------
+
+@dataclass(frozen=True)
+class ToolResult:
+    """工具执行结果规范结构"""
+
+    content: str
+    metadata: dict[str,Any] = field(default_factory=dict) #default_factory:[调用函数]时默认生成值
+
+
 @dataclass(frozen=True)
 class ToolSpec:
     """agent可调用工具规范结构"""
@@ -28,14 +37,6 @@ class ToolPlan:
     """LLM输出的工具计划"""
     tool: str|None
     arguments:dict[str,Any]|None = None
-
-@dataclass(frozen=True)
-class ToolResult:
-    """工具执行结果规范结构"""
-
-    content: str
-    metadata: dict[str,Any] = field(default_factory=dict) #default_factory:[调用函数]时默认生成值
-
 
 
 #--------------------工具调用函数-----------------------

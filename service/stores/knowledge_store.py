@@ -4,9 +4,9 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
-from service.env import PROJECT_ROOT
-from service.sqlite_store import SQLiteStore
-from service.errors import KnowledgeError
+from service.core.env import PROJECT_ROOT
+from service.stores.sqlite_store import SQLiteStore
+from service.core.errors import KnowledgeError
 
 DEFAULT_DB_PATH = PROJECT_ROOT / "database" / "knowledge.db"
 

@@ -1,6 +1,6 @@
 """建临时数据库，测试数据库添加与搜索"""
 
-from service.knowledge_store import KnowledgeStore
+from service.stores.knowledge_store import KnowledgeStore
 
 
 def test_add_and_search_knowledge(tmp_path):

@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from service.errors import SessionError
-from service.env import PROJECT_ROOT
-from service.sqlite_store import SQLiteStore
+from service.core.errors import SessionError
+from service.core.env import PROJECT_ROOT
+from service.stores.sqlite_store import SQLiteStore
 
 DEFAULT_SESSION_DB_PATH = PROJECT_ROOT / "database" / "sessions.db"
 

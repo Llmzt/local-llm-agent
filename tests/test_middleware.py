@@ -1,8 +1,8 @@
 """中间件测试"""
 from fastapi.testclient import TestClient
 
-import service.api as api_module
-from service.session_store import SessionStore
+import service.api.api as api_module
+from service.stores.session_store import SessionStore
 
 
 def create_client(tmp_path, monkeypatch) -> TestClient:

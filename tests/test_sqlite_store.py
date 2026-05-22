@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-from service.sqlite_store import SQLiteStore
+from service.stores.sqlite_store import SQLiteStore
 
 def test_transaction_commits_on_success(tmp_path):
     store = SQLiteStore(tmp_path / "test.db")

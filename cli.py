@@ -1,7 +1,7 @@
 """提供命令行聊天入口，维护对话历史并调用 Agent。"""
 
-from service.errors import AppError
-from service.logger import get_logger
+from service.core.errors import AppError
+from service.core.logger import get_logger
 
 from agent import (
     add_assistant_message,

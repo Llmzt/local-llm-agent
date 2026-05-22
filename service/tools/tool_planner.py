@@ -3,9 +3,9 @@
 import json
 import unicodedata
 
-from service.logger import get_logger
+from service.core.logger import get_logger
 from service.llm import call_planner_llm
-from service.tool_router import ToolPlan,ToolSpec
+from service.tools.tool_router import ToolPlan,ToolSpec
 
 logger = get_logger(__name__)
 

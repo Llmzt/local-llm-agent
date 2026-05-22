@@ -6,8 +6,8 @@ from collections.abc import Awaitable,Callable
 
 from fastapi import Request,Response
 
-from service.logger import get_logger
-from service.request_context import set_request_id
+from service.core.logger import get_logger
+from service.core.request_context import set_request_id
 
 logger = get_logger(__name__)
 

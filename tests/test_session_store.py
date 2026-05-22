@@ -1,4 +1,4 @@
-from service.session_store import SessionStore
+from service.stores.session_store import SessionStore
 
 
 def test_create_session_returns_session_id(tmp_path):

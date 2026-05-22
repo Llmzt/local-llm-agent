@@ -2,8 +2,8 @@
 
 import os
 from dataclasses import dataclass
-from service.errors import ConfigError
-from service.env import load_env_file
+from service.core.errors import ConfigError
+from service.core.env import load_env_file
 
 
 @dataclass(frozen=True)

@@ -1,6 +1,6 @@
 """知识库查询入口。"""
 
-from service.knowledge_store import KnowledgeStore
+from service.stores.knowledge_store import KnowledgeStore
 
 
 STOP_WORDS = (

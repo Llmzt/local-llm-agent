@@ -3,10 +3,10 @@
 import time
 from collections.abc import Iterator
 
-from service.config import load_config
-from service.logger import get_logger
+from service.core.config import load_config
+from service.core.logger import get_logger
 
-from service.errors import LLMError
+from service.core.errors import LLMError
 
 logger = get_logger(__name__)
 

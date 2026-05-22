@@ -2,8 +2,8 @@
 
 from typing import Any
 
-from service.errors import ToolError
-from service.tool_router import ToolResult
+from service.core.errors import ToolError
+from service.tools.tool_router import ToolResult
 #各工具的执行函数
 from skill.knowledge import search_knowledge
 from skill.knowledge_write import add_knowledge

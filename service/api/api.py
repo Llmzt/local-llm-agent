@@ -1,4 +1,6 @@
 """web API入口"""
+from __future__ import annotations
+
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, HTTPException, Request,Path
 from fastapi.exceptions import RequestValidationError
@@ -15,17 +17,17 @@ from agent import (
     trim_history,
     run_agent_stream,
 )
-from service.error_response import (
+from service.api.error_response import (
     app_error_payload,
     error_payload,
     http_error_payload,
     unexpected_error_payload,
     validation_error_payload,
 )
-from service.logger import get_logger
-from service.session_store import SessionStore
-from service.middleware import request_context_middleware
-from service.errors import AppError, RequestError
+from service.core.logger import get_logger
+from service.stores.session_store import SessionStore
+from service.core.middleware import request_context_middleware
+from service.core.errors import AppError, RequestError
 
 logger = get_logger(__name__)
 

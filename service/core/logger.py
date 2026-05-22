@@ -5,7 +5,7 @@ import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from service.env import PROJECT_ROOT,load_env_file
+from service.core.env import PROJECT_ROOT,load_env_file
 
 LOG_DIR = PROJECT_ROOT / "logs"
 DEFAULT_LOG_FILE = LOG_DIR / "agent.log"

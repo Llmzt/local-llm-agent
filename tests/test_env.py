@@ -1,5 +1,5 @@
 """测试 .env 单行解析。"""
-from service.env import _parse_env_line
+from service.core.env import _parse_env_line
 
 def test_parse_env_line_with_plain_value():
     assert _parse_env_line("MODEL=qvq-max") == ("MODEL", "qvq-max")

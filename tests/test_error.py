@@ -1,6 +1,6 @@
 """异常处理测试"""
-from service.error_response import app_error_payload, error_payload
-from service.errors import AppError, LLMError, RequestError
+from service.api.error_response import app_error_payload, error_payload
+from service.core.errors import AppError, LLMError, RequestError
 
 
 def test_error_payload_shape():

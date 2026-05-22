@@ -1,7 +1,7 @@
 import pytest
 
-from service.errors import ToolError
-from service.tool_router import (
+from service.core.errors import ToolError
+from service.tools.tool_router import (
     ToolPlan,
     ToolResult,
     ToolSpec,

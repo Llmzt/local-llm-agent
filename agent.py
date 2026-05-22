@@ -1,7 +1,7 @@
 """Agent 主流程：决定走本地工具，还是交给普通 LLM。"""
 from service.llm import stream_llm_chunks,call_llm_with_model,get_config
 from skill.knowledge import search_knowledge    #用于隐式知识库查询
-from service.tool_adapters import (
+from service.tools.tool_adapters import (
     parse_empty_arguments,
     parse_knowledge_search_arguments,
     parse_knowledge_write_arguments,
@@ -9,13 +9,13 @@ from service.tool_adapters import (
     run_knowledge_write_tool,
     run_time_tool,
 )
-from service.logger import get_logger
-from service.tool_router import (
+from service.core.logger import get_logger
+from service.tools.tool_router import (
     ToolSpec,
     execute_tool_plan,
     route_tool_by_rule,
 )
-from service.tool_planner import plan_tool_with_llm
+from service.tools.tool_planner import plan_tool_with_llm
 
 from collections.abc import Iterator
 

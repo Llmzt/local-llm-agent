@@ -1,13 +1,13 @@
 """llm工具路由测试"""
-from service.tool_planner import (
+from service.tools.tool_planner import (
     build_planner_prompt,
     normalize_user_input_for_cache,
     parse_tool_plan,
     build_cache_key,
 )
-from service.tool_router import ToolPlan, ToolResult, ToolSpec
+from service.tools.tool_router import ToolPlan, ToolResult, ToolSpec
 import pytest
-import service.tool_planner as planner_module
+import service.tools.tool_planner as planner_module
 
 @pytest.fixture(autouse=True)#执行测试前自动清理缓存
 def clear_plan_cache():

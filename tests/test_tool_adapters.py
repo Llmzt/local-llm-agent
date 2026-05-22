@@ -1,12 +1,12 @@
 """工具适配器测试"""
 
-from service.tool_adapters import (
+from service.tools.tool_adapters import (
     parse_empty_arguments,
     parse_knowledge_search_arguments,
     parse_knowledge_write_arguments,
     run_time_tool,
 )
-from service.tool_router import ToolResult
+from service.tools.tool_router import ToolResult
 
 
 def test_parse_empty_arguments():

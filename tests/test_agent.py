@@ -1,6 +1,6 @@
 """测试大模型对话与回复"""
 import agent
-from service.tool_router import ToolResult
+from service.tools.tool_router import ToolResult
 
 
 def test_create_history_contains_system_prompt():
@@ -24,9 +24,15 @@ def test_trim_history_keeps_system_message_and_recent_rounds():
     assert trimmed[-1]["content"] == "assistant 19"
 
 
-def test_run_agent_routes_to_time_tool():
+def test_run_agent_uses_planner_for_time_tool(monkeypatch):
     messages = agent.create_history()
-    agent.add_user_message(messages, "现在几点？")
+    agent.add_user_message(messages, "今天日期？")
+
+    monkeypatch.setattr(
+        agent,
+        "run_planned_tool",
+        lambda text: ToolResult(content="2026-05-22 13:16:40"),
+    )
 
     reply = agent.run_agent(messages, stream=False)
 

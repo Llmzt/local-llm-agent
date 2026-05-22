@@ -1,7 +1,7 @@
 """知识库写入工具。"""
 
-from service.knowledge_store import KnowledgeStore
-from service.logger import get_logger
+from service.stores.knowledge_store import KnowledgeStore
+from service.core.logger import get_logger
 
 logger = get_logger(__name__)
 
