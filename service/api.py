@@ -15,7 +15,6 @@ from agent import (
     trim_history,
     run_agent_stream,
 )
-from service.errors import AppError, RequestError
 from service.error_response import (
     app_error_payload,
     error_payload,
@@ -25,12 +24,17 @@ from service.error_response import (
 )
 from service.logger import get_logger
 from service.session_store import SessionStore
+from service.middleware import request_context_middleware
+from service.errors import AppError, RequestError
 
 logger = get_logger(__name__)
 
-app = FastAPI(title="Local Agent API")
+app = FastAPI(title="Local Agent API") 
 
-app.add_middleware(
+app.middleware("http")(request_context_middleware)  #装饰器的手动写法；中间件注册器（HTTP请求的处理中间件）
+                                                    #每当HTTP请求到来，先交给中间件，中间件交给request_context_middleware
+
+app.add_middleware(#前后端连接的关键
     CORSMiddleware,#中间件跨域
     allow_origins=[#访问后端的前端白名单
         "http://127.0.0.1:5173",
@@ -50,7 +54,7 @@ def get_session_store() -> SessionStore:
 
 def sse_event(event: str,data: dict) ->str:
     """把事件转换成SSE文本格式"""
-    return f"event: {event}\ndata: {json.dumps(data,ensure_ascii=False)}\n\n"#注意键值对空格格式
+    return f"event: {event}\ndata: {json.dumps(data,ensure_ascii=False)}\n\n"   #注意键值对空格格式
 
 def stream_chat_events(request: ChatStreamRequest) ->Iterator[str]:
     """流式聊天事件生成器"""

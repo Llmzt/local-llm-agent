@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from fastapi.exceptions import RequestValidationError
 
 from service.errors import AppError
+from service.request_context import get_request_id
 
 
 
@@ -15,6 +16,7 @@ def error_payload(code: str, message: str) -> dict:
         "error":{
             "code": code,
             "message": message,
+            "request_id":get_request_id(),
         },
     }
 

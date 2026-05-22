@@ -12,6 +12,7 @@ def test_error_payload_shape():
         "error": {
             "code": "TEST_ERROR",
             "message": "测试错误。",
+            "request_id":None,
         },
     }
 
