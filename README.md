@@ -1,6 +1,6 @@
-# chat_agent
+# LOCAL LLM Agent
 
-一个本地中文智能 Agent 聊天助手，面向 Agent 工程化学习与实践。项目包含 FastAPI 后端、SSE 流式输出、SQLite 会话持久化、结构化工具系统、LLM 工具决策、统一异常处理、请求追踪，以及玻璃拟态 Web 前端。
+一个本地中文智能 Agent 助手，面向 Agent 工程化学习与实践。项目包含 FastAPI 后端、SSE 流式输出、SQLite 会话持久化、结构化工具系统、LLM 工具决策、统一异常处理、请求追踪，以及玻璃拟态 Web 前端。
 
 ![Python](https://img.shields.io/badge/Python-3.12%2B-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-API-009688)
@@ -60,8 +60,8 @@
 ### 获取项目
 
 ```bash
-git clone https://github.com/Llmzt/chat_agent.git
-cd chat_agent
+git clone https://github.com/Llmzt/local-llm-agent.git
+cd local-llm-agent
 ### 环境要求
 
 - Python 3.12 或更高版本
@@ -120,6 +120,8 @@ LOG_FILE="./logs/agent.log"
 | `MAX_RETRIES` | 模型请求失败后的重试次数 |
 | `LOG_LEVEL` | 日志级别 |
 | `LOG_FILE` | 日志文件路径 |
+
+
 
 ## 运行方式
 
@@ -204,6 +206,78 @@ Docker Compose 会挂载本地运行数据：
 - 当前前端默认请求 `http://127.0.0.1:8000`，部署到服务器或域名时需要改成可配置 API 地址。
 - 当前 CORS 白名单面向本地开发，部署到域名时需要同步配置后端允许来源。
 
+## 工具调用示例
+
+### 获取当前时间
+
+用户输入：
+
+```text
+现在几点了
+````
+
+Agent 自动路由到本地时间工具：
+
+```python
+ToolSpec(
+    name="time",
+    description="回答当前时间、日期、星期相关问题。",
+    ...
+)
+```
+
+返回结果：
+
+```text
+现在时间：2000-01-01 00:00:00
+```
+
+---
+
+### 查询知识库
+
+用户输入：
+
+```text
+查询知识库 FastAPI
+```
+
+Agent 自动调用 SQLite 知识库检索工具：
+
+```python
+ToolSpec(
+    name="knowledge_search",
+    description="查询本地 SQLite 知识库",
+    ...
+)
+```
+
+返回结果：
+
+```text
+- FastAPI：FastAPI 是一个现代 Python Web API 框架。
+```
+
+---
+
+### 写入知识库
+
+用户输入：
+
+```text
+添加知识：FastAPI | FastAPI 是 Python Web 框架 | Python,API
+```
+
+Agent 自动执行知识写入：
+
+```text
+已添加知识：FastAPI
+```
+
+```
+```
+
+
 ## API 示例
 
 ### 普通聊天
@@ -251,56 +325,9 @@ curl http://127.0.0.1:8000/sessions
 curl -X DELETE http://127.0.0.1:8000/sessions/{session_id}
 ```
 
-### 错误响应
 
-JSON API 错误结构：
 
-```json
-{
-  "ok": false,
-  "data": null,
-  "error": {
-    "code": "LLM_ERROR",
-    "message": "模型调用失败，请稍后重试。",
-    "request_id": "..."
-  }
-}
-```
 
-SSE 错误事件：
-
-```text
-event: error
-data: {"code":"LLM_ERROR","message":"模型调用失败，请稍后重试。","request_id":"..."}
-```
-
-## 知识库用法
-
-查询知识库：
-
-```text
-查询知识库 Python
-搜索 FastAPI
-```
-
-写入知识库：
-
-```text
-添加知识：标题 | 内容 | 关键词
-```
-
-示例：
-
-```text
-添加知识：FastAPI | FastAPI 是一个 Python Web API 框架。 | Python,API
-```
-
-默认存储位置：
-
-```text
-database/knowledge.db
-database/sessions.db
-```
 
 ## 测试
 
